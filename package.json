@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=extension",
     "dev:ext": "turbo run dev:ext --filter=extension",
+    "dev:server": "turbo run dev --filter=server",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
