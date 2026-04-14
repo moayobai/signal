@@ -7,7 +7,7 @@ export default defineConfig({
     name: 'SIGNAL',
     description: 'Real-time AI co-pilot for sales & investor calls',
     version: '0.1.0',
-    permissions: ['tabs', 'storage'],
+    permissions: ['tabs', 'storage', 'tabCapture'],
     host_permissions: [
       '*://meet.google.com/*',
       '*://*.zoom.us/*',
@@ -16,6 +16,9 @@ export default defineConfig({
   },
   vite: () => ({
     plugins: [tailwindcss()],
+    define: {
+      __WS_URL__: JSON.stringify(process.env.WS_URL ?? 'ws://localhost:8080'),
+    },
     resolve: {
       alias: {
         '@signal/types': '../../packages/types/index.ts',
