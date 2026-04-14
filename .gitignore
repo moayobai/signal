@@ -3,6 +3,9 @@ dist/
 .output/
 .wxt/
 *.zip
+*.crx
+*.pem
 .env
 .env.local
+.env.*.local
 .turbo/
