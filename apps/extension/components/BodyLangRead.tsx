@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { BodyLangRead as BodyLangReadType } from '@signal/types';
 
 interface BodyLangReadProps {
@@ -43,7 +44,7 @@ function Badge({ label, variant }: { label: string; variant: BadgeVariant }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex justify-between items-center mb-1.5 last:mb-0">
       <span className="text-[11px] text-[--text-secondary]">{label}</span>
