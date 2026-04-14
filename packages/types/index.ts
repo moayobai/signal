@@ -40,7 +40,7 @@ export interface TranscriptLine {
 export interface CallSession {
   id: string;
   platform: 'meet' | 'zoom' | 'teams';
-  type: 'investor' | 'enterprise' | 'bd' | 'customer';
+  type: CallType;
   prospect: { name: string; company: string; role: string };
   startedAt: number;
   transcript: TranscriptLine[];
