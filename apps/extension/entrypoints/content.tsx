@@ -1,6 +1,8 @@
 import ReactDOM from 'react-dom/client';
 import { createShadowRootUi } from 'wxt/client';
 import { Overlay } from '../overlay/Overlay';
+import { useSignalStore } from '../overlay/store';
+import type { ServerMessage } from '@signal/types';
 
 export default defineContentScript({
   matches: [
@@ -29,7 +31,7 @@ export default defineContentScript({
         container.style.pointerEvents = 'auto';
 
         const root = ReactDOM.createRoot(container);
-        root.render(<Overlay useMockFixture={true} />);
+        root.render(<Overlay useMockFixture={false} />);
         return root;
       },
 
@@ -39,5 +41,37 @@ export default defineContentScript({
     });
 
     ui.mount();
+
+    // Trigger audio capture via background service worker
+    chrome.runtime.sendMessage({ type: 'START_CAPTURE' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[SIGNAL] START_CAPTURE error:', chrome.runtime.lastError.message);
+      } else if (response?.error) {
+        console.warn('[SIGNAL] Capture failed:', response.error);
+      }
+    });
+
+    // Listen for server messages relayed from background
+    chrome.runtime.onMessage.addListener((msg: ServerMessage) => {
+      const store = useSignalStore.getState();
+
+      switch (msg.type) {
+        case 'frame':
+          store.setFrame(msg.frame);
+          break;
+        case 'transcript':
+          store.appendTranscriptLine(msg.line);
+          break;
+        case 'state':
+          store.setOverlayState(msg.overlayState);
+          break;
+        case 'connected':
+          store.setOverlayState('LIVE');
+          break;
+        case 'error':
+          console.error('[SIGNAL] Server error:', msg.message);
+          break;
+      }
+    });
   },
 });
