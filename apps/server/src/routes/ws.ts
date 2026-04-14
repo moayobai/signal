@@ -76,7 +76,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       // Try JSON parse first; if it fails, treat as binary audio
       const data = Buffer.isBuffer(rawData)
         ? rawData
-        : Buffer.from(rawData as string);
+        : Buffer.from(rawData as ArrayBuffer);
 
       try {
         const msg = JSON.parse(data.toString()) as ClientMessage;
