@@ -42,6 +42,15 @@ async function buildApp() {
   return app;
 }
 
+// Connects and waits for the initial 'connected' message before resolving,
+// avoiding a race where the message fires before a subsequent once('message') listener is attached.
+function connectAndDrainConnected(address: string): Promise<WebSocket> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(address);
+    ws.once('message', () => resolve(ws));
+  });
+}
+
 describe('WebSocket route', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let address: string;
@@ -69,9 +78,7 @@ describe('WebSocket route', () => {
   });
 
   it('handles binary audio chunk without crashing', async () => {
-    const ws = new WebSocket(address);
-    await new Promise<void>((resolve) => ws.on('open', resolve));
-    await new Promise<void>((resolve) => ws.once('message', () => resolve()));
+    const ws = await connectAndDrainConnected(address);
     ws.send(Buffer.from([0x01, 0x02, 0x03]));
     await new Promise(r => setTimeout(r, 50));
     expect(ws.readyState).toBe(WebSocket.OPEN);
@@ -79,9 +86,7 @@ describe('WebSocket route', () => {
   });
 
   it('handles stop message', async () => {
-    const ws = new WebSocket(address);
-    await new Promise<void>((resolve) => ws.on('open', resolve));
-    await new Promise<void>((resolve) => ws.once('message', () => resolve()));
+    const ws = await connectAndDrainConnected(address);
     ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
     ws.close();
