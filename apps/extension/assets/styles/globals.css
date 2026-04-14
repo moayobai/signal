@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "@signal/tokens/tokens.css";
+
+@theme {
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --radius-pill: var(--radius-pill);
+  --radius-lg: var(--radius-lg);
+  --radius-md: var(--radius-md);
+  --radius-sm: var(--radius-sm);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+/* Motion keyframes */
+@keyframes border-pulse {
+  0%, 100% { border-color: rgba(255, 159, 10, 0.4); }
+  50%       { border-color: rgba(255, 159, 10, 0.9); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
