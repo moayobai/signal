@@ -52,3 +52,16 @@ export interface PostCallSummary {
   decisions: string[];
   followUpDraft: string;
 }
+
+export type CallType = 'investor' | 'enterprise' | 'bd' | 'customer';
+
+export type ClientMessage =
+  | { type: 'start'; platform: 'meet' | 'zoom' | 'teams'; callType: CallType }
+  | { type: 'stop' };
+
+export type ServerMessage =
+  | { type: 'connected'; sessionId: string }
+  | { type: 'transcript'; line: TranscriptLine }
+  | { type: 'frame'; frame: SignalFrame }
+  | { type: 'state'; overlayState: OverlayState }
+  | { type: 'error'; message: string };
