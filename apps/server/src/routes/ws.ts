@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import { CallSession } from '../services/session.js';
 import { createDeepgramClient } from '../services/deepgram.js';
+import { createHumeClient, type HumeHandle } from '../services/hume.js';
 import { runLiveNudge } from '../services/claude.js';
 import { buildSystemPrompt, buildUserPrompt } from '../prompts/live.js';
 import { generateSummary } from '../services/summary.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
 import { contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB } from '../services/db.js';
 import type { AIProvider } from '../services/ai.js';
-import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine, CallType } from '@signal/types';
+import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine, CallType, FaceSignals } from '@signal/types';
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
@@ -19,6 +20,7 @@ export interface WsRouteOptions {
   ai: AIProvider;
   deepgramApiKey: string;
   deepgramModel?: string;
+  humeApiKey: string;
   octamemApiKey: string;
   liveModel: string;
   summaryModel: string;
@@ -39,6 +41,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     let claudeTimer: NodeJS.Timeout | null = null;
     let sentimentSum = 0;
     let sentimentCount = 0;
+    let latestFaceSignals: FaceSignals | undefined;
     const dangerMoments: Array<{ reason: string; timestamp: number }> = [];
     const collectedTranscript: TranscriptLine[] = [];
     let stopPromise: Promise<void> | null = null;
@@ -74,6 +77,12 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         console.error('[SIGNAL] Deepgram error:', err);
         send({ type: 'error', message: 'STT error' });
       },
+    });
+
+    const hume: HumeHandle = createHumeClient({
+      apiKey: opts.humeApiKey,
+      onFaceSignals: (signals) => { latestFaceSignals = signals; },
+      onError: (err) => console.error('[SIGNAL] Hume error:', err),
     });
 
     async function onStart(msg: Extract<ClientMessage, { type: 'start' }>): Promise<void> {
@@ -114,15 +123,19 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           userPrompt: buildUserPrompt(window),
         });
         if (frame) {
+          // Attach latest Hume face signals if available
+          const enrichedFrame: SignalFrame = latestFaceSignals
+            ? { ...frame, faceSignals: latestFaceSignals }
+            : frame;
           try {
-            persistFrame(opts.db, sessionId, frame);
+            persistFrame(opts.db, sessionId, enrichedFrame);
           } catch (err) {
             console.error('[SIGNAL] failed to persist frame:', err);
           }
-          sentimentSum += frame.sentiment;
+          sentimentSum += enrichedFrame.sentiment;
           sentimentCount += 1;
-          send({ type: 'frame', frame });
-          send({ type: 'state', overlayState: frame.dangerFlag ? 'DANGER' : 'LIVE' });
+          send({ type: 'frame', frame: enrichedFrame });
+          send({ type: 'state', overlayState: enrichedFrame.dangerFlag ? 'DANGER' : 'LIVE' });
         }
       }, CLAUDE_INTERVAL_MS);
     }
@@ -136,6 +149,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     async function _onStop(): Promise<void> {
       if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = null; }
       dg.finish();
+      hume.close();
 
       const endedAt = Date.now();
       const durationMs = endedAt - startedAt;
@@ -201,7 +215,9 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         const msg = JSON.parse(data.toString()) as ClientMessage;
         if (msg.type === 'start') { void onStart(msg); return; }
         if (msg.type === 'stop') { void onStop(); return; }
+        if (msg.type === 'video_frame') { hume.sendFrame(msg.data); return; }
       } catch {
+        // Binary = audio chunk → forward to Deepgram
         dg.send(data);
       }
     });

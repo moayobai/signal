@@ -8,6 +8,7 @@ const RECONNECT_DELAYS = [1000, 2000, 4000] as const;
 
 let wsocket: WebSocket | null = null;
 let recorder: MediaRecorder | null = null;
+let frameInterval: ReturnType<typeof setInterval> | null = null;
 let activeTabId: number | null = null;
 let reconnectAttempt = 0;
 
@@ -67,9 +68,19 @@ async function queryOctaMem(prospect: Prospect): Promise<string | null> {
 }
 
 function startCapture(sendResponse: (r: unknown) => void): void {
-  chrome.tabCapture.capture({ audio: true, video: false }, (stream: MediaStream | null) => {
+  // Capture both audio and video so we can extract frames for Hume AI face analysis.
+  // Video capture may be denied on some platforms — we fall back to audio-only.
+  chrome.tabCapture.capture({ audio: true, video: true }, (stream: MediaStream | null) => {
     if (!stream) {
-      sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
+      // Fallback: audio-only (Hume face analysis will be unavailable)
+      chrome.tabCapture.capture({ audio: true, video: false }, (audioStream: MediaStream | null) => {
+        if (!audioStream) {
+          sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
+          return;
+        }
+        connectWs(audioStream);
+        sendResponse({ ok: true });
+      });
       return;
     }
     connectWs(stream);
@@ -91,6 +102,7 @@ async function connectWs(stream: MediaStream): Promise<void> {
     const startMsg: ClientMessage = { type: 'start', platform, callType, prospect };
     ws.send(JSON.stringify(startMsg));
     startRecorder(stream, ws);
+    startVideoFramer(stream, ws);
   };
 
   ws.onmessage = (event) => {
@@ -130,6 +142,50 @@ function startRecorder(stream: MediaStream, ws: WebSocket): void {
   rec.start(250);
 }
 
+function startVideoFramer(stream: MediaStream, ws: WebSocket): void {
+  const videoTrack = stream.getVideoTracks()[0];
+  if (!videoTrack) return; // audio-only fallback — no video available
+
+  // ImageCapture API: grab still frames from the live video track.
+  // OffscreenCanvas downscales to 640×360 to keep payload small (~15–30 KB/frame).
+  const imageCapture = new ImageCapture(videoTrack);
+  const FRAME_INTERVAL_MS = 4000;
+  const TARGET_WIDTH = 640;
+  const TARGET_HEIGHT = 360;
+
+  frameInterval = setInterval(async () => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      const bitmap = await imageCapture.grabFrame();
+      const scale = Math.min(TARGET_WIDTH / bitmap.width, TARGET_HEIGHT / bitmap.height, 1);
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close();
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
+      const buffer = await blob.arrayBuffer();
+      // btoa over chunked bytes to avoid call-stack overflow on large frames
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const CHUNK = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+      }
+      const base64 = btoa(binary);
+      ws.send(JSON.stringify({ type: 'video_frame', data: base64 } satisfies ClientMessage));
+    } catch {
+      // Track ended or permission revoked — clear the interval
+      stopVideoFramer();
+    }
+  }, FRAME_INTERVAL_MS);
+}
+
+function stopVideoFramer(): void {
+  if (frameInterval !== null) { clearInterval(frameInterval); frameInterval = null; }
+}
+
 function stopRecorder(): void {
   if (recorder?.state !== 'inactive') recorder?.stop();
   recorder = null;
@@ -137,6 +193,7 @@ function stopRecorder(): void {
 
 function stopCapture(): void {
   stopRecorder();
+  stopVideoFramer();
   if (wsocket) {
     wsocket.send(JSON.stringify({ type: 'stop' } satisfies ClientMessage));
     wsocket.close();

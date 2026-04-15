@@ -18,7 +18,8 @@
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^4.27.0"
+    "fastify": "^4.27.0",
+    "ws": "^8.17.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -29,7 +30,6 @@
     "pino-pretty": "^13.0.0",
     "tsx": "^4.15.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0",
-    "ws": "^8.17.0"
+    "vitest": "^2.0.0"
   }
 }

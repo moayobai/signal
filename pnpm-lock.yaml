@@ -57,6 +57,9 @@ importers:
       '@types/chrome':
         specifier: ^0.1.40
         version: 0.1.40
+      '@types/dom-mediacapture-transform':
+        specifier: ^0.1.11
+        version: 0.1.11
       '@types/react':
         specifier: ^18.3.0
         version: 18.3.28
@@ -102,6 +105,9 @@ importers:
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
+      ws:
+        specifier: ^8.17.0
+        version: 8.20.0
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
@@ -130,9 +136,6 @@ importers:
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)
-      ws:
-        specifier: ^8.17.0
-        version: 8.20.0
 
   apps/server/dashboard:
     dependencies:
@@ -1329,6 +1332,12 @@ packages:
 
   '@types/chrome@0.1.40':
     resolution: {integrity: sha512-UnfyRAe8ORu9HSuTH0EqyOEUin3JrWW9Nl/gDXezNfTUrfIoxw+WRZgKOxGz0t5BnjbfXBnS2eCYfW2PxH1wcA==}
+
+  '@types/dom-mediacapture-transform@0.1.11':
+    resolution: {integrity: sha512-Y2p+nGf1bF2XMttBnsVPHUWzRRZzqUoJAKmiP10b5umnO6DDrWI0BrGDJy1pOHoOULVmGSfFNkQrAlC5dcj6nQ==}
+
+  '@types/dom-webcodecs@0.1.18':
+    resolution: {integrity: sha512-vAvE8C9DGWR+tkb19xyjk1TSUlJ7RUzzp4a9Anu7mwBT+fpyePWK1UxmH14tMO5zHmrnrRIMg5NutnnDztLxgg==}
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -5166,6 +5175,12 @@ snapshots:
     dependencies:
       '@types/filesystem': 0.0.36
       '@types/har-format': 1.2.16
+
+  '@types/dom-mediacapture-transform@0.1.11':
+    dependencies:
+      '@types/dom-webcodecs': 0.1.18
+
+  '@types/dom-webcodecs@0.1.18': {}
 
   '@types/estree@1.0.8': {}
 

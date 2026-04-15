@@ -31,9 +31,24 @@ export interface BodyLangRead {
   tone: 'positive' | 'curious' | 'neutral' | 'hesitant' | 'resistant';
 }
 
+/**
+ * Real-time facial emotion data from Hume AI.
+ * Only present when HUME_API_KEY is configured and video capture is active.
+ */
+export interface FaceSignals {
+  /** Top 3 emotions by score */
+  topEmotions: Array<{ name: string; score: number }>;
+  /** Single highest-scoring emotion name */
+  dominantEmotion: string;
+  /** Face presence/visibility score (0–1). Low = face not clearly detected. */
+  attention: number;
+}
+
 export interface SignalFrame {
   prompt: SignalPrompt;
   bodyLang: BodyLangRead;
+  /** Hume AI face emotion data — undefined when video is not available */
+  faceSignals?: FaceSignals;
   sentiment: number; // 0–100
   dangerFlag: boolean;
   dangerReason: string | null;
@@ -68,7 +83,12 @@ export type ClientMessage =
       callType: CallType;
       prospect: Prospect;
     }
-  | { type: 'stop' };
+  | { type: 'stop' }
+  | {
+      /** Base64-encoded JPEG frame from tab video capture, sent every ~4s */
+      type: 'video_frame';
+      data: string;
+    };
 
 export type ServerMessage =
   | { type: 'connected'; sessionId: string }

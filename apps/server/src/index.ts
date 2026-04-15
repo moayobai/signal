@@ -16,6 +16,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? 'sk-or-your-key-her
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY ?? 'your-deepgram-key-here';
 const DEEPGRAM_MODEL = process.env.DEEPGRAM_MODEL ?? 'nova-3';
 const OCTAMEM_API_KEY = process.env.OCTAMEM_API_KEY ?? 'your-octamem-key-here';
+const HUME_API_KEY = process.env.HUME_API_KEY ?? 'your-hume-key-here';
 const DATABASE_URL = process.env.DATABASE_URL ?? './signal.db';
 const LIVE_MODEL = process.env.LIVE_MODEL ?? 'claude-haiku-4-5-20251001';
 const SUMMARY_MODEL = process.env.SUMMARY_MODEL ?? 'claude-sonnet-4-6';
@@ -53,6 +54,7 @@ registerWsRoute(app, {
   db, ai,
   deepgramApiKey: DEEPGRAM_API_KEY,
   deepgramModel: DEEPGRAM_MODEL,
+  humeApiKey: HUME_API_KEY,
   octamemApiKey: OCTAMEM_API_KEY,
   liveModel: LIVE_MODEL,
   summaryModel: SUMMARY_MODEL,
@@ -70,6 +72,7 @@ try {
   }
   if (DEEPGRAM_API_KEY.startsWith('your-deepgram')) app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
   if (OCTAMEM_API_KEY.startsWith('your-octamem')) app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
+  if (HUME_API_KEY.startsWith('your-hume')) app.log.warn('[SIGNAL] HUME_API_KEY is placeholder — face emotion analysis disabled');
 } catch (err) {
   app.log.error(err);
   process.exit(1);

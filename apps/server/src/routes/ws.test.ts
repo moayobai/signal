@@ -25,6 +25,7 @@ async function buildApp() {
     db: initDb(':memory:'),
     ai: new NoOpProvider(),
     deepgramApiKey: 'your-deepgram-key-here',
+    humeApiKey: 'your-hume-key-here',
     octamemApiKey: 'your-octamem-key-here',
     liveModel: 'claude-haiku-4-5-20251001',
     summaryModel: 'claude-sonnet-4-6',

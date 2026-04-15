@@ -1,4 +1,4 @@
-import type { BodyLangRead, SignalFrame, TranscriptLine } from '@signal/types';
+import type { BodyLangRead, FaceSignals, SignalFrame, TranscriptLine } from '@signal/types';
 import { SentimentRing } from './SentimentRing';
 
 interface Props {
@@ -21,6 +21,49 @@ function formatTime(s: number): string {
   const m = Math.floor(s / 60).toString().padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
+}
+
+function emotionColor(score: number): string {
+  if (score >= 0.6) return 'var(--sig-pos)';
+  if (score >= 0.35) return '#a5f3fc';
+  return 'var(--sig-ink-3)';
+}
+
+function FaceSignalsPanel({ signals }: { signals: FaceSignals }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: 'var(--sig-font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sig-ink-3)' }}>
+          Dominant
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--sig-ink-1)', letterSpacing: '-0.005em' }}>
+          {signals.dominantEmotion}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: 'var(--sig-font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sig-ink-3)' }}>
+          Attention
+        </span>
+        <span style={{ fontSize: 11, color: signals.attention >= 0.8 ? 'var(--sig-pos)' : 'var(--sig-neutral)' }}>
+          {Math.round(signals.attention * 100)}%
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+        {signals.topEmotions.map(e => (
+          <span key={e.name} style={{
+            fontFamily: 'var(--sig-font-mono)', fontSize: 9,
+            padding: '2px 6px', borderRadius: 999,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: emotionColor(e.score),
+            letterSpacing: '0.04em',
+          }}>
+            {e.name} {Math.round(e.score * 100)}%
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ago(ms: number): string {
@@ -89,11 +132,11 @@ export function LiveSidebar({
         </div>
       </section>
 
-      {/* Body language section */}
+      {/* Speech signals section */}
       {frame && (
         <section className="section">
           <div className="label">
-            <span>Body language</span>
+            <span>Speech</span>
           </div>
           <div className="body-lang">
             {BODY_LABELS.map(({ k, label }) => (
@@ -103,6 +146,17 @@ export function LiveSidebar({
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Hume AI face signals — only shown when video capture is active */}
+      {frame?.faceSignals && (
+        <section className="section">
+          <div className="label">
+            <span>Face</span>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>HUME AI</span>
+          </div>
+          <FaceSignalsPanel signals={frame.faceSignals} />
         </section>
       )}
 
