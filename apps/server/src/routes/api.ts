@@ -86,6 +86,19 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     };
   });
 
+  // ── OctaMem ────────────────────────────────────────────────────────
+
+  // Popup helper: query OctaMem via server (extension can't hold the key)
+  app.post('/api/octamem/query', async (req) => {
+    const { prospect } = req.body as { prospect: { name: string; company?: string } };
+    const { queryProspectContext } = await import('../services/octamem.js');
+    const context = await queryProspectContext({
+      apiKey: process.env.OCTAMEM_API_KEY ?? '',
+      prospect,
+    });
+    return { context };
+  });
+
   // ── Analytics ──────────────────────────────────────────────────────
 
   app.get('/api/analytics/sentiment', async () => {

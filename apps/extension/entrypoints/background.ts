@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from '@signal/types';
+import type { ClientMessage, ServerMessage, Prospect, CallType } from '@signal/types';
 
 declare const __WS_URL__: string;
 
@@ -13,24 +13,68 @@ let reconnectAttempt = 0;
 
 export default defineBackground(() => {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.type === 'START_CAPTURE') {
-      activeTabId = sender.tab?.id ?? null;
-      startCapture(sendResponse);
-      return true; // keep channel open for async response
+    if (msg.type === 'PROSPECT_DETECTED') {
+      const first = (msg.names as string[]).find(n => n.length > 1);
+      if (first) chrome.storage.session.set({ detectedProspect: { name: first } });
+      sendResponse({ ok: true });
+      return;
     }
+
+    if (msg.type === 'POPUP_START_REQUEST') {
+      // User clicked Start Call — kick off capture on last active tab
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+        if (tab?.id != null) {
+          activeTabId = tab.id;
+          startCapture(() => sendResponse({ ok: true }));
+        }
+      });
+      return true;
+    }
+
+    if (msg.type === 'START_CAPTURE') {
+      // Legacy auto-trigger from content.tsx — only proceed if prospect already present
+      activeTabId = sender.tab?.id ?? null;
+      chrome.storage.session.get(['pendingProspect']).then(d => {
+        if (!d.pendingProspect) { sendResponse({ error: 'no prospect — open popup first' }); return; }
+        startCapture(sendResponse);
+      });
+      return true;
+    }
+
     if (msg.type === 'STOP_CAPTURE') {
       stopCapture();
       sendResponse({ ok: true });
+      return;
+    }
+
+    if (msg.type === 'OCTAMEM_QUERY') {
+      // Popup can't hit the server directly with auth headers from popup context in some setups —
+      // simplest is to GET through a Fastify proxy or call directly. For self-hosted, direct fetch works.
+      queryOctaMem(msg.prospect as Prospect).then(context => sendResponse({ context })).catch(() => sendResponse({ context: null }));
+      return true;
     }
   });
 });
 
+async function queryOctaMem(prospect: Prospect): Promise<string | null> {
+  if (!prospect?.name) return null;
+  try {
+    const base = __WS_URL__.replace(/^ws/, 'http');
+    const res = await fetch(`${base}/api/octamem/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prospect }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { context: string | null };
+    return data.context;
+  } catch { return null; }
+}
+
 function startCapture(sendResponse: (r: unknown) => void): void {
   chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
     if (!stream) {
-      const errMsg = chrome.runtime.lastError?.message ?? 'capture failed';
-      console.error('[SIGNAL] tabCapture failed:', errMsg);
-      sendResponse({ error: errMsg });
+      sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
       return;
     }
     connectWs(stream);
@@ -38,14 +82,17 @@ function startCapture(sendResponse: (r: unknown) => void): void {
   });
 }
 
-function connectWs(stream: MediaStream): void {
+async function connectWs(stream: MediaStream): Promise<void> {
+  const { pendingProspect, pendingCallType } = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']);
+  const prospect: Prospect = pendingProspect ?? { name: 'Unknown' };
+  const callType: CallType = pendingCallType ?? 'enterprise';
+
   const ws = new WebSocket(WS_URL);
   wsocket = ws;
 
   ws.onopen = () => {
-    console.log('[SIGNAL] WS connected');
     reconnectAttempt = 0;
-    const startMsg: ClientMessage = { type: 'start', platform: 'meet', callType: 'enterprise' };
+    const startMsg: ClientMessage = { type: 'start', platform: 'meet', callType, prospect };
     ws.send(JSON.stringify(startMsg));
     startRecorder(stream, ws);
   };
@@ -54,62 +101,48 @@ function connectWs(stream: MediaStream): void {
     try {
       const msg = JSON.parse(event.data as string) as ServerMessage;
       if (activeTabId !== null) {
-        chrome.tabs.sendMessage(activeTabId, msg).catch(() => {
-          // tab may have closed
-        });
+        chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
       }
-    } catch {
-      // malformed message — ignore
-    }
+      if (msg.type === 'summary') {
+        chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
+      }
+    } catch { /* ignore */ }
   };
 
-  ws.onerror = (err) => {
-    console.error('[SIGNAL] WS error:', err);
-  };
+  ws.onerror = (err) => console.error('[SIGNAL] WS error:', err);
 
   ws.onclose = () => {
-    console.log('[SIGNAL] WS closed');
     stopRecorder();
     if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
       const delay = RECONNECT_DELAYS[reconnectAttempt] ?? 4000;
       reconnectAttempt++;
-      console.log(`[SIGNAL] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`);
-      setTimeout(() => connectWs(stream), delay);
+      setTimeout(() => { void connectWs(stream); }, delay);
     }
   };
 }
 
 function startRecorder(stream: MediaStream, ws: WebSocket): void {
   const mimeType = 'audio/webm;codecs=opus';
-  if (!MediaRecorder.isTypeSupported(mimeType)) {
-    console.error('[SIGNAL] MediaRecorder does not support', mimeType);
-    return;
-  }
+  if (!MediaRecorder.isTypeSupported(mimeType)) return;
   const rec = new MediaRecorder(stream, { mimeType });
   recorder = rec;
-
   rec.ondataavailable = (e) => {
     if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-      e.data.arrayBuffer().then(buf => ws.send(buf));
+      void e.data.arrayBuffer().then(buf => ws.send(buf));
     }
   };
-
   rec.start(250);
-  console.log('[SIGNAL] MediaRecorder started');
 }
 
 function stopRecorder(): void {
-  if (recorder?.state !== 'inactive') {
-    recorder?.stop();
-  }
+  if (recorder?.state !== 'inactive') recorder?.stop();
   recorder = null;
 }
 
 function stopCapture(): void {
   stopRecorder();
   if (wsocket) {
-    const stopMsg: ClientMessage = { type: 'stop' };
-    wsocket.send(JSON.stringify(stopMsg));
+    wsocket.send(JSON.stringify({ type: 'stop' } satisfies ClientMessage));
     wsocket.close();
     wsocket = null;
   }
