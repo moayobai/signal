@@ -36,6 +36,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
 await app.register(fastifyStatic, { root: publicDir, prefix: '/dashboard/' });
 
+// SPA fallback: any /dashboard/* request that doesn't match a built asset returns
+// index.html so client-side routing (react-router) works on hard refresh and direct links.
+app.setNotFoundHandler((req, reply) => {
+  if (req.url.startsWith('/dashboard/')) {
+    return reply.sendFile('index.html');
+  }
+  reply.code(404).send({ error: 'Not Found' });
+});
+
 app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
 registerWsRoute(app, {
