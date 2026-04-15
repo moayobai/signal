@@ -37,15 +37,6 @@ export interface TranscriptLine {
   timestamp: number;
 }
 
-export interface CallSession {
-  id: string;
-  platform: 'meet' | 'zoom' | 'teams';
-  type: CallType;
-  prospect: { name: string; company: string; role: string };
-  startedAt: number;
-  transcript: TranscriptLine[];
-}
-
 export interface PostCallSummary {
   winSignals: string[];
   objections: string[];
