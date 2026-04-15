@@ -12,7 +12,12 @@ export default defineConfig({
       '*://meet.google.com/*',
       '*://*.zoom.us/*',
       '*://teams.microsoft.com/*',
+      'http://localhost:8080/*',
     ],
+    action: {
+      default_popup: 'popup.html',
+      default_title: 'SIGNAL',
+    },
   },
   vite: () => ({
     plugins: [tailwindcss()],
@@ -20,9 +25,7 @@ export default defineConfig({
       __WS_URL__: JSON.stringify(process.env.WS_URL ?? 'ws://localhost:8080'),
     },
     resolve: {
-      alias: {
-        '@signal/types': '../../packages/types/index.ts',
-      },
+      alias: { '@signal/types': '../../packages/types/index.ts' },
     },
   }),
 });
