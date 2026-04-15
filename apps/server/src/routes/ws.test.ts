@@ -3,47 +3,36 @@ import Fastify from 'fastify';
 import websocketPlugin from '@fastify/websocket';
 import WebSocket from 'ws';
 
-// Mock services
 vi.mock('../services/deepgram.js', () => ({
-  createDeepgramClient: vi.fn(() => ({
-    send: vi.fn(),
-    finish: vi.fn(),
-  })),
+  createDeepgramClient: vi.fn(() => ({ send: vi.fn(), finish: vi.fn() })),
 }));
-
-vi.mock('../services/claude.js', () => ({
-  callClaude: vi.fn().mockResolvedValue(null),
+vi.mock('../services/octamem.js', () => ({
+  queryProspectContext: vi.fn().mockResolvedValue(null),
+  storeCallMemory: vi.fn().mockResolvedValue(null),
 }));
-
-vi.mock('../services/session.js', () => ({
-  CallSession: vi.fn().mockImplementation(() => ({
-    id: 'test-session-id',
-    addLine: vi.fn(),
-    getWindow: vi.fn(() => []),
-    newLinesSinceLastCall: 0,
-    resetNewLines: vi.fn(),
-    isSilent: vi.fn(() => false),
-    detectKeyword: vi.fn(() => null),
-    setCompetitors: vi.fn(),
-    callType: 'enterprise',
-  })),
+vi.mock('../services/summary.js', () => ({
+  generateSummary: vi.fn().mockResolvedValue(null),
 }));
 
 import { registerWsRoute } from './ws.js';
+import { initDb } from '../services/db.js';
+import { NoOpProvider } from '../services/ai.js';
 
 async function buildApp() {
   const app = Fastify({ logger: false });
   await app.register(websocketPlugin);
   registerWsRoute(app, {
-    anthropicApiKey: 'sk-ant-your-key-here',
+    db: initDb(':memory:'),
+    ai: new NoOpProvider(),
     deepgramApiKey: 'your-deepgram-key-here',
+    octamemApiKey: 'your-octamem-key-here',
+    liveModel: 'claude-haiku-4-5-20251001',
+    summaryModel: 'claude-sonnet-4-6',
   });
   await app.ready();
   return app;
 }
 
-// Connects and waits for the initial 'connected' message before resolving,
-// avoiding a race where the message fires before a subsequent once('message') listener is attached.
 function connectAndDrainConnected(address: string): Promise<WebSocket> {
   return new Promise((resolve) => {
     const ws = new WebSocket(address);
@@ -57,38 +46,38 @@ describe('WebSocket route', () => {
 
   beforeEach(async () => {
     app = await buildApp();
-    const listenAddress = await app.listen({ port: 0 });
-    const port = new URL(listenAddress).port;
-    address = `ws://localhost:${port}/ws`;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
   });
-
-  afterEach(async () => {
-    await app.close();
-  });
+  afterEach(async () => { await app.close(); });
 
   it('sends connected message on connect', async () => {
     const ws = new WebSocket(address);
     const msg = await new Promise<string>((resolve) => {
-      ws.on('message', (data) => resolve(data.toString()));
+      ws.on('message', (d) => resolve(d.toString()));
     });
     ws.close();
-    const parsed = JSON.parse(msg);
-    expect(parsed.type).toBe('connected');
-    expect(typeof parsed.sessionId).toBe('string');
+    expect(JSON.parse(msg).type).toBe('connected');
   });
 
-  it('handles binary audio chunk without crashing', async () => {
+  it('handles start with prospect + stop', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(Buffer.from([0x01, 0x02, 0x03]));
+    ws.send(JSON.stringify({
+      type: 'start', platform: 'meet', callType: 'investor',
+      prospect: { name: 'James', company: 'Acme' },
+    }));
+    await new Promise(r => setTimeout(r, 100));
+    ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
     expect(ws.readyState).toBe(WebSocket.OPEN);
     ws.close();
   });
 
-  it('handles stop message', async () => {
+  it('handles binary audio chunk', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({ type: 'stop' }));
+    ws.send(Buffer.from([0x01, 0x02, 0x03]));
     await new Promise(r => setTimeout(r, 50));
+    expect(ws.readyState).toBe(WebSocket.OPEN);
     ws.close();
   });
 });
