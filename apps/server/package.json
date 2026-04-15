@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js",
+    "build": "pnpm run build:dashboard && esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:better-sqlite3",
+    "build:dashboard": "pnpm --filter dashboard run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
