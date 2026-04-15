@@ -10,6 +10,8 @@ function isPlaceholderKey(key: string): boolean {
 
 interface DeepgramClientOptions {
   apiKey: string;
+  /** Deepgram model name. Defaults to 'nova-3'. Override via DEEPGRAM_MODEL env var. */
+  model?: string;
   onTranscript: (line: TranscriptLine) => void;
   onError: (err: unknown) => void;
 }
@@ -20,7 +22,7 @@ export interface DeepgramHandle {
 }
 
 export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHandle {
-  const { apiKey, onTranscript, onError } = options;
+  const { apiKey, model = 'nova-3', onTranscript, onError } = options;
 
   if (isPlaceholderKey(apiKey)) {
     console.log('[SIGNAL] Deepgram key is placeholder — STT disabled');
@@ -32,7 +34,7 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
 
   const client = createClient(apiKey);
   const connection = client.listen.live({
-    model: 'nova-3',
+    model,
     language: 'en',
     diarize: true,
     punctuate: true,

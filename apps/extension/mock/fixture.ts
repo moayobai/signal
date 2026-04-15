@@ -26,7 +26,7 @@ const FRAMES: Array<{ t: number; frame: SignalFrame }> = [
     t: 3000,
     frame: {
       prompt: { type: 'ASK', text: 'Open with their top priority — "What\'s the #1 thing you need memory to do reliably?"', confidence: 0.85, isNudge: false, timestamp: 3000 },
-      bodyLang: { eyeContact: 'direct', posture: 'forward', microExpressions: 'engaged' },
+      bodyLang: { engagement: 'active', energy: 'rising', tone: 'curious' },
       sentiment: 55,
       dangerFlag: false,
       dangerReason: null,
@@ -36,7 +36,7 @@ const FRAMES: Array<{ t: number; frame: SignalFrame }> = [
     t: 8000,
     frame: {
       prompt: { type: 'REFRAME', text: 'Lead with accountability, not accuracy. "Mem0 solves retrieval. We solve retrieval accountability — that\'s what regulated industries audit."', confidence: 0.92, isNudge: false, timestamp: 8000 },
-      bodyLang: { eyeContact: 'strong', posture: 'forward', microExpressions: 'nodding' },
+      bodyLang: { engagement: 'strong', energy: 'high', tone: 'positive' },
       sentiment: 74,
       dangerFlag: false,
       dangerReason: null,
@@ -45,18 +45,18 @@ const FRAMES: Array<{ t: number; frame: SignalFrame }> = [
   {
     t: 15000,
     frame: {
-      prompt: { type: 'WARN', text: 'They\'ve leaned back. Re-engage with a direct question before continuing.', confidence: 0.88, isNudge: true, timestamp: 15000 },
-      bodyLang: { eyeContact: 'moderate', posture: 'leaning back', microExpressions: 'thinking' },
+      prompt: { type: 'WARN', text: 'Engagement dropping — shorter answers, hedging language. Re-engage with a direct question.', confidence: 0.88, isNudge: true, timestamp: 15000 },
+      bodyLang: { engagement: 'moderate', energy: 'declining', tone: 'hesitant' },
       sentiment: 48,
       dangerFlag: true,
-      dangerReason: 'Disengagement detected — posture shift + sentiment drop',
+      dangerReason: 'Disengagement detected — shorter responses + hedging tone',
     },
   },
   {
     t: 22000,
     frame: {
       prompt: { type: 'ASK', text: '"What would it take for you to pilot this with one team in Q3?"', confidence: 0.91, isNudge: false, timestamp: 22000 },
-      bodyLang: { eyeContact: 'direct', posture: 'neutral', microExpressions: 'engaged' },
+      bodyLang: { engagement: 'active', energy: 'neutral', tone: 'curious' },
       sentiment: 68,
       dangerFlag: false,
       dangerReason: null,
@@ -66,7 +66,7 @@ const FRAMES: Array<{ t: number; frame: SignalFrame }> = [
     t: 30000,
     frame: {
       prompt: { type: 'CLOSE', text: 'Buying signal detected. Anchor next step: "Should I send the pilot agreement to you directly?"', confidence: 0.94, isNudge: false, timestamp: 30000 },
-      bodyLang: { eyeContact: 'strong', posture: 'forward', microExpressions: 'nodding' },
+      bodyLang: { engagement: 'strong', energy: 'high', tone: 'positive' },
       sentiment: 82,
       dangerFlag: false,
       dangerReason: null,

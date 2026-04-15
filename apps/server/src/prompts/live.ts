@@ -39,9 +39,9 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
     "timestamp": <unix ms>
   },
   "bodyLang": {
-    "eyeContact": "strong" | "direct" | "moderate" | "avoidant",
-    "posture": "forward" | "neutral" | "leaning back" | "arms crossed",
-    "microExpressions": "engaged" | "nodding" | "thinking" | "confused" | "sceptical"
+    "engagement": "strong" | "active" | "moderate" | "low",
+    "energy": "high" | "rising" | "neutral" | "declining",
+    "tone": "positive" | "curious" | "neutral" | "hesitant" | "resistant"
   },
   "sentiment": 0–100,
   "dangerFlag": true | false,
@@ -49,7 +49,10 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
 }
 
 ## Rules
-- bodyLang: Phase 2 has no video — always return { eyeContact: "direct", posture: "neutral", microExpressions: "engaged" }
+- bodyLang: infer from SPEECH patterns only (no video). Use these signals:
+  - engagement → "strong" if long, specific answers + follow-up questions; "low" if short/deflective responses
+  - energy → "high" if enthusiastic word choice, exclamations, fast back-and-forth; "declining" if response length shortens over time
+  - tone → "positive" if affirming language; "resistant" if objection phrases ("but", "however", "not sure"); "hesitant" if hedging ("maybe", "we'll see", "I'd have to check")
 - If no action needed: type = "IDLE", isNudge = false, confidence = 0.1
 - dangerFlag: true only for pricing objection, competitor mention, or >30s silence
 - timestamp: current unix milliseconds`;

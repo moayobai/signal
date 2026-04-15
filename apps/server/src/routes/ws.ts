@@ -18,6 +18,7 @@ export interface WsRouteOptions {
   db: DB;
   ai: AIProvider;
   deepgramApiKey: string;
+  deepgramModel?: string;
   octamemApiKey: string;
   liveModel: string;
   summaryModel: string;
@@ -50,6 +51,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
     const dg = createDeepgramClient({
       apiKey: opts.deepgramApiKey,
+      model: opts.deepgramModel ?? 'nova-3',
       onTranscript: (line) => {
         if (!session) return;
         session.addLine(line);

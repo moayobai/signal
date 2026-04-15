@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import websocketPlugin from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
@@ -13,6 +14,7 @@ const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'claude') as 'claude' | 'openrou
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? 'sk-ant-your-key-here';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? 'sk-or-your-key-here';
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY ?? 'your-deepgram-key-here';
+const DEEPGRAM_MODEL = process.env.DEEPGRAM_MODEL ?? 'nova-3';
 const OCTAMEM_API_KEY = process.env.OCTAMEM_API_KEY ?? 'your-octamem-key-here';
 const DATABASE_URL = process.env.DATABASE_URL ?? './signal.db';
 const LIVE_MODEL = process.env.LIVE_MODEL ?? 'claude-haiku-4-5-20251001';
@@ -50,6 +52,7 @@ app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 registerWsRoute(app, {
   db, ai,
   deepgramApiKey: DEEPGRAM_API_KEY,
+  deepgramModel: DEEPGRAM_MODEL,
   octamemApiKey: OCTAMEM_API_KEY,
   liveModel: LIVE_MODEL,
   summaryModel: SUMMARY_MODEL,

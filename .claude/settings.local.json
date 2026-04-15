@@ -64,7 +64,9 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d[0]['id']\\)\")",
       "Bash(pnpm --filter extension dev)",
       "Bash(python3 -m http.server 5174)",
-      "Bash(curl -sI http://localhost:5174/harness.html)"
+      "Bash(curl -sI http://localhost:5174/harness.html)",
+      "Bash(gh auth:*)",
+      "Read(//Users/mahomedayob/.config/gh/**)"
     ]
   }
 }

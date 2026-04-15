@@ -12,9 +12,9 @@ interface Props {
 }
 
 const BODY_LABELS: Array<{ k: keyof BodyLangRead; label: string }> = [
-  { k: 'eyeContact',       label: 'Eye contact' },
-  { k: 'posture',          label: 'Posture' },
-  { k: 'microExpressions', label: 'Read' },
+  { k: 'engagement', label: 'Engagement' },
+  { k: 'energy',     label: 'Energy' },
+  { k: 'tone',       label: 'Tone' },
 ];
 
 function formatTime(s: number): string {
@@ -99,7 +99,7 @@ export function LiveSidebar({
             {BODY_LABELS.map(({ k, label }) => (
               <div className="row" key={k}>
                 <span className="k">{label}</span>
-                <span className="v">{frame.bodyLang[k]}</span>
+                <span className="v" data-val={frame.bodyLang[k]}>{frame.bodyLang[k]}</span>
               </div>
             ))}
           </div>

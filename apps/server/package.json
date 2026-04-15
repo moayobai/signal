@@ -16,6 +16,7 @@
     "@fastify/static": "^7.0.4",
     "@fastify/websocket": "^10.0.1",
     "better-sqlite3": "^12.9.0",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^4.27.0"
   },

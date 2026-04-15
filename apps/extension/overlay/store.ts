@@ -39,9 +39,9 @@ const DEFAULT_FRAME: SignalFrame = {
     timestamp: 0,
   },
   bodyLang: {
-    eyeContact: 'direct',
-    posture: 'neutral',
-    microExpressions: 'engaged',
+    engagement: 'active',
+    energy: 'neutral',
+    tone: 'neutral',
   },
   sentiment: 50,
   dangerFlag: false,

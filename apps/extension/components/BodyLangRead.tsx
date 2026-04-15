@@ -5,32 +5,33 @@ interface BodyLangReadProps {
   data: BodyLangReadType;
 }
 
-type BadgeVariant = 'green' | 'amber' | 'red' | 'neutral';
+type BadgeVariant = 'green' | 'cyan' | 'amber' | 'red' | 'neutral';
 
-const eyeContactVariant: Record<BodyLangReadType['eyeContact'], BadgeVariant> = {
-  strong: 'green',
-  direct: 'green',
-  moderate: 'amber',
-  avoidant: 'red',
+const engagementVariant: Record<BodyLangReadType['engagement'], BadgeVariant> = {
+  strong:   'green',
+  active:   'cyan',
+  moderate: 'neutral',
+  low:      'amber',
 };
 
-const postureVariant: Record<BodyLangReadType['posture'], BadgeVariant> = {
-  forward: 'green',
-  neutral: 'green',
-  'leaning back': 'amber',
-  'arms crossed': 'amber',
+const energyVariant: Record<BodyLangReadType['energy'], BadgeVariant> = {
+  high:      'green',
+  rising:    'cyan',
+  neutral:   'neutral',
+  declining: 'amber',
 };
 
-const microVariant: Record<BodyLangReadType['microExpressions'], BadgeVariant> = {
-  engaged: 'green',
-  nodding: 'green',
-  thinking: 'neutral',
-  confused: 'amber',
-  sceptical: 'red',
+const toneVariant: Record<BodyLangReadType['tone'], BadgeVariant> = {
+  positive:  'green',
+  curious:   'cyan',
+  neutral:   'neutral',
+  hesitant:  'amber',
+  resistant: 'red',
 };
 
 const badgeStyles: Record<BadgeVariant, string> = {
   green:   'bg-[rgba(48,209,88,0.12)] text-[#1a8c3a]',
+  cyan:    'bg-[rgba(50,200,230,0.12)] text-[#0077a8]',
   amber:   'bg-[rgba(255,159,10,0.12)] text-[#b06000]',
   red:     'bg-[rgba(255,69,58,0.12)] text-[#c0392b]',
   neutral: 'bg-black/[0.05] text-[--text-secondary]',
@@ -57,16 +58,16 @@ export function BodyLangRead({ data }: BodyLangReadProps) {
   return (
     <div className="px-4 py-3 border-b border-black/5">
       <div className="text-[9px] font-semibold tracking-[0.1em] uppercase text-[--text-tertiary] mb-2">
-        Body language
+        Speech signals
       </div>
-      <Row label="Eye contact">
-        <Badge label={data.eyeContact} variant={eyeContactVariant[data.eyeContact]} />
+      <Row label="Engagement">
+        <Badge label={data.engagement} variant={engagementVariant[data.engagement]} />
       </Row>
-      <Row label="Posture">
-        <Badge label={data.posture} variant={postureVariant[data.posture]} />
+      <Row label="Energy">
+        <Badge label={data.energy} variant={energyVariant[data.energy]} />
       </Row>
-      <Row label="Micro-expressions">
-        <Badge label={data.microExpressions} variant={microVariant[data.microExpressions]} />
+      <Row label="Tone">
+        <Badge label={data.tone} variant={toneVariant[data.tone]} />
       </Row>
     </div>
   );

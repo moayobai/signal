@@ -346,6 +346,19 @@
   font-size: 12px;
   letter-spacing: -0.005em;
 }
+/* Speech signal value colours */
+.sig-sidebar .body-lang .row .v[data-val="strong"],
+.sig-sidebar .body-lang .row .v[data-val="high"],
+.sig-sidebar .body-lang .row .v[data-val="positive"] { color: var(--sig-pos); }
+.sig-sidebar .body-lang .row .v[data-val="active"],
+.sig-sidebar .body-lang .row .v[data-val="rising"],
+.sig-sidebar .body-lang .row .v[data-val="curious"] { color: #a5f3fc; }
+.sig-sidebar .body-lang .row .v[data-val="moderate"],
+.sig-sidebar .body-lang .row .v[data-val="neutral"] { color: var(--sig-ink-2); }
+.sig-sidebar .body-lang .row .v[data-val="low"],
+.sig-sidebar .body-lang .row .v[data-val="declining"],
+.sig-sidebar .body-lang .row .v[data-val="hesitant"] { color: var(--sig-neutral); }
+.sig-sidebar .body-lang .row .v[data-val="resistant"] { color: var(--sig-neg); }
 
 /* ── Cues feed ── */
 

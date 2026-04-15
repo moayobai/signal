@@ -17,10 +17,18 @@ export interface SignalPrompt {
   timestamp: number;
 }
 
+/**
+ * Speech signals inferred from transcript patterns by Claude.
+ * These are conversation/language-based — not video body language.
+ *
+ * engagement: how actively the prospect is participating (response length, question count)
+ * energy:     enthusiasm inferred from word choice, punctuation, response cadence
+ * tone:       emotional register inferred from phrasing, hedging, and sentiment markers
+ */
 export interface BodyLangRead {
-  eyeContact: 'strong' | 'direct' | 'moderate' | 'avoidant';
-  posture: 'forward' | 'neutral' | 'leaning back' | 'arms crossed';
-  microExpressions: 'engaged' | 'nodding' | 'thinking' | 'confused' | 'sceptical';
+  engagement: 'strong' | 'active' | 'moderate' | 'low';
+  energy: 'high' | 'rising' | 'neutral' | 'declining';
+  tone: 'positive' | 'curious' | 'neutral' | 'hesitant' | 'resistant';
 }
 
 export interface SignalFrame {
