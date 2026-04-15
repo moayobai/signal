@@ -40,11 +40,16 @@ export default defineContentScript({
       position: 'overlay',
       anchor: 'body',
       onMount(container, _shadow, shadowHost) {
+        // New HUD: overlay children pin themselves via position: fixed, so the
+        // host fills the viewport and lets clicks pass through by default.
+        // Individual panels opt into pointerEvents: auto on themselves.
         Object.assign(shadowHost.style, {
-          position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
-          pointerEvents: 'none', width: 'auto', height: 'auto',
+          position: 'fixed',
+          inset: '0',
+          zIndex: '2147483647',
+          pointerEvents: 'none',
         });
-        container.style.pointerEvents = 'auto';
+        container.style.pointerEvents = 'none';
         const root = ReactDOM.createRoot(container);
         root.render(<Overlay useMockFixture={false} />);
         return root;

@@ -98,7 +98,8 @@ export function createFixture(callbacks: FixtureCallbacks): () => void {
     callbacks.onOverlayState('POSTCALL');
     callbacks.onPostCallSummary(POST_CALL_SUMMARY);
   }, 40000));
-  timers.push(setTimeout(() => callbacks.onOverlayState('IDLE'), 48000));
+  // (Previously auto-reset to IDLE at 48s — removed so the harness stays in
+  // POSTCALL for previewing the summary card without a user interaction.)
 
   for (const line of TRANSCRIPT) {
     timers.push(setTimeout(() => callbacks.onTranscriptLine(line), line.timestamp));

@@ -1,93 +1,14 @@
-import '../assets/styles/globals.css';
-import { useEffect } from 'react';
+import './overlay.css';
+import { useEffect, useState } from 'react';
 import { useSignalStore } from './store';
 import { createFixture } from '../mock/fixture';
-import { GlassPanel } from '../components/GlassPanel';
-import { SentimentArc } from '../components/SentimentArc';
-import { BodyLangRead } from '../components/BodyLangRead';
-import { PromptCard } from '../components/PromptCard';
-import { TranscriptFeed } from '../components/TranscriptFeed';
+import { NudgeCard } from './components/NudgeCard';
+import { LiveSidebar } from './components/LiveSidebar';
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60).toString().padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
-}
-
-function IdlePill({ elapsed, status }: { elapsed: number; status: 'nominal' | 'nudge' | 'danger' }) {
-  const dotColor = {
-    nominal: 'bg-[--success]',
-    nudge: 'bg-[--warning]',
-    danger: 'bg-[--danger]',
-  }[status];
-
-  const label =
-    status === 'nudge' ? 'Nudge ready'
-    : status === 'danger' ? 'Off track'
-    : `SIGNAL · ${formatTime(elapsed)}`;
-
-  return (
-    <GlassPanel variant="pill">
-      <div className={`w-1.5 h-1.5 rounded-full ${dotColor} mr-2 shrink-0`} />
-      <span className="text-[13px] font-medium text-[--text-primary] truncate">{label}</span>
-    </GlassPanel>
-  );
-}
-
-function LivePanel({ elapsed, danger }: { elapsed: number; danger: boolean }) {
-  const { frame, transcript } = useSignalStore();
-  if (!frame) return null;
-
-  return (
-    <GlassPanel variant="panel" danger={danger}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.06]">
-        <span className="text-[12px] font-semibold tracking-[0.02em] text-[--text-primary]">
-          SIG<span className="text-[--accent]">NAL</span>
-        </span>
-        <div className="flex items-center gap-1.5 bg-[rgba(48,209,88,0.12)] text-[#1a8c3a] text-[10px] font-semibold px-2.5 py-1 rounded-full tracking-[0.04em]">
-          <div className="w-1.5 h-1.5 rounded-full bg-[--success]" />
-          LIVE · {formatTime(elapsed)}
-        </div>
-      </div>
-      <SentimentArc value={frame.sentiment} />
-      <BodyLangRead data={frame.bodyLang} />
-      <TranscriptFeed lines={transcript} />
-      <PromptCard prompt={frame.prompt} />
-    </GlassPanel>
-  );
-}
-
-function PostCallPanel() {
-  const { postCallSummary } = useSignalStore();
-  if (!postCallSummary) return null;
-
-  return (
-    <GlassPanel variant="panel">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.06]">
-        <span className="text-[12px] font-semibold text-[--text-primary]">
-          SIG<span className="text-[--accent]">NAL</span>
-        </span>
-        <span className="text-[10px] font-semibold text-[--text-secondary] tracking-[0.04em]">
-          CALL COMPLETE
-        </span>
-      </div>
-      <div className="px-4 py-3 space-y-2">
-        {postCallSummary.winSignals.map((s, i) => (
-          <div key={i} className="text-[11px] px-3 py-1.5 bg-[rgba(48,209,88,0.08)] rounded-lg text-[#1a8c3a]">
-            ✓ {s}
-          </div>
-        ))}
-        {postCallSummary.decisions.map((d, i) => (
-          <div key={i} className="text-[11px] px-3 py-1.5 bg-[--accent-subtle] rounded-lg text-[--accent]">
-            → {d}
-          </div>
-        ))}
-        <div className="text-[11px] px-3 py-1.5 bg-black/[0.04] rounded-lg text-[--text-secondary]">
-          ⟳ Follow-up draft queued
-        </div>
-      </div>
-    </GlassPanel>
-  );
 }
 
 interface OverlayProps {
@@ -97,14 +18,13 @@ interface OverlayProps {
 export function Overlay({ useMockFixture = false }: OverlayProps) {
   const {
     overlayState,
-    frame,
-    elapsedSeconds,
-    setOverlayState,
-    setFrame,
-    appendTranscriptLine,
-    setPostCallSummary,
-    setElapsedSeconds,
+    frame, prevSentiment, cueHistory, frameVersion,
+    transcript, elapsedSeconds, postCallSummary,
+    setOverlayState, setFrame, appendTranscriptLine, setPostCallSummary, setElapsedSeconds,
   } = useSignalStore();
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   useEffect(() => {
     if (!useMockFixture) return;
@@ -118,20 +38,86 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
     return stop;
   }, [useMockFixture]);
 
-  const idleStatus =
-    overlayState === 'DANGER' ? 'danger'
-    : frame?.prompt.isNudge ? 'nudge'
-    : 'nominal';
+  // Re-show the nudge card whenever a new frame version arrives
+  useEffect(() => { setNudgeDismissed(false); }, [frameVersion]);
+
+  const danger = overlayState === 'DANGER';
+  const showNudge = (overlayState === 'LIVE' || overlayState === 'DANGER')
+    && frame
+    && frame.prompt.type !== 'IDLE'
+    && !nudgeDismissed;
 
   return (
-    <>
+    <div className="sig-root">
       {overlayState === 'IDLE' && (
-        <IdlePill elapsed={elapsedSeconds} status={idleStatus} />
+        <div className="sig-pill">
+          <span className="dot" />
+          <span>Signal</span>
+          <span className="time">{formatTime(elapsedSeconds)}</span>
+        </div>
       )}
+
       {(overlayState === 'LIVE' || overlayState === 'DANGER') && (
-        <LivePanel elapsed={elapsedSeconds} danger={overlayState === 'DANGER'} />
+        <>
+          {showNudge && frame && (
+            <NudgeCard
+              frame={frame}
+              danger={danger}
+              freshKey={frameVersion}
+              onDismiss={() => setNudgeDismissed(true)}
+            />
+          )}
+
+          {!collapsed ? (
+            <LiveSidebar
+              frame={frame}
+              prevSentiment={prevSentiment}
+              cueHistory={cueHistory}
+              transcript={transcript}
+              elapsedSeconds={elapsedSeconds}
+              danger={danger}
+              onCollapse={() => setCollapsed(true)}
+            />
+          ) : (
+            <div
+              className={`sig-pill ${danger ? 'danger' : ''}`}
+              onClick={() => setCollapsed(false)}
+            >
+              <span className="dot" />
+              <span>Signal</span>
+              <span className="time">{formatTime(elapsedSeconds)}</span>
+            </div>
+          )}
+        </>
       )}
-      {overlayState === 'POSTCALL' && <PostCallPanel />}
-    </>
+
+      {overlayState === 'POSTCALL' && postCallSummary && (
+        <div className="sig-postcall">
+          <div className="head">
+            <div>
+              <div className="eyebrow">Call complete</div>
+              <h2>Here's what happened.</h2>
+            </div>
+          </div>
+
+          <h3 className="win">Win signals</h3>
+          <ul className="win">
+            {postCallSummary.winSignals.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+
+          <h3 className="obj">Objections</h3>
+          <ul className="obj">
+            {postCallSummary.objections.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+
+          <h3 className="dec">Decisions</h3>
+          <ul className="dec">
+            {postCallSummary.decisions.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+
+          <div className="followup">{postCallSummary.followUpDraft}</div>
+        </div>
+      )}
+    </div>
   );
 }
