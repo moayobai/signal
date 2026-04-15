@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { PreCallSetup } from '../components/popup/PreCallSetup';
-import { PostCallView } from '../components/popup/PostCallView';
+import { PreCallSetup } from '../../components/popup/PreCallSetup';
+import { PostCallView } from '../../components/popup/PostCallView';
 import type { PostCallSummary, Prospect } from '@signal/types';
-import '../components/popup/popup.css';
+import '../../components/popup/popup.css';
 
 type View = 'pre' | 'post';
 
