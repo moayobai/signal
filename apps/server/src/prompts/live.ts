@@ -13,12 +13,15 @@ function loadCompanyContext(): string {
 
 const COMPANY_CONTEXT = loadCompanyContext();
 
-export function buildSystemPrompt(callType: CallType): string {
+export function buildSystemPrompt(callType: CallType, octaMemContext?: string | null): string {
+  const priorContext = octaMemContext
+    ? `\n## Prior Context on This Prospect\n${octaMemContext}\n`
+    : '';
   return `You are SIGNAL, a real-time AI co-pilot for ${callType} calls. You receive a rolling transcript and return structured coaching JSON.
 
 ## Company Context
 ${COMPANY_CONTEXT}
-
+${priorContext}
 ## Your Role
 Analyse the last 90 seconds of transcript and return a single JSON object. Keep prompts under 160 characters. Be direct. Prioritise the highest-value action right now.
 
