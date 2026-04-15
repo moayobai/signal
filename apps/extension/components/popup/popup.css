@@ -1,0 +1,21 @@
+html, body { margin: 0; width: 360px; font: 13px/1.4 -apple-system, system-ui, sans-serif; color: #e5e5e5; background: #0b0b0d; }
+.popup { padding: 16px; }
+.popup header { font-size: 16px; letter-spacing: 2px; margin-bottom: 12px; color: #f59e0b; }
+.pre-call section { margin-bottom: 16px; }
+.pre-call h3 { font-size: 12px; text-transform: uppercase; color: #888; margin: 0 0 8px; }
+.pre-call label { display: block; margin-bottom: 8px; font-size: 11px; color: #aaa; }
+.pre-call input { width: 100%; padding: 6px 8px; background: #1a1a1f; border: 1px solid #333; color: #e5e5e5; border-radius: 4px; }
+.pills { display: flex; gap: 4px; }
+.pill { flex: 1; padding: 6px; background: #1a1a1f; border: 1px solid #333; color: #aaa; cursor: pointer; border-radius: 4px; font-size: 11px; }
+.pill.active { background: #f59e0b; color: #000; border-color: #f59e0b; }
+.octamem { background: #1a1a1f; padding: 12px; border-radius: 6px; }
+.octamem h4 { margin: 0 0 6px; font-size: 11px; color: #f59e0b; text-transform: uppercase; }
+.octamem .muted { color: #666; font-size: 11px; }
+.start-btn { width: 100%; padding: 10px; background: #f59e0b; color: #000; border: 0; font-weight: 600; cursor: pointer; border-radius: 4px; margin-top: 8px; }
+.start-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
+.post-call h3 { margin: 0 0 12px; }
+.post-call h4 { margin: 12px 0 4px; font-size: 11px; color: #888; text-transform: uppercase; }
+.post-call ul { margin: 0; padding-left: 16px; }
+.followup { background: #1a1a1f; padding: 10px; border-radius: 4px; white-space: pre-wrap; font-size: 12px; }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+.actions button { flex: 1; padding: 8px; background: #1a1a1f; border: 1px solid #333; color: #e5e5e5; cursor: pointer; border-radius: 4px; }
