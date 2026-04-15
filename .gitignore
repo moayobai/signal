@@ -9,3 +9,10 @@ dist/
 .env.local
 .env.*.local
 .turbo/
+
+# Server build & data
+apps/server/public/assets/
+apps/server/public/index.html
+apps/server/dist/
+apps/server/signal.db
+apps/server/signal.db-*
