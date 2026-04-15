@@ -29,8 +29,17 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   contacts:        () => j<Contact[]>('/contacts'),
   contact:    (id: string) => j<Contact>(`/contacts/${id}`),
+  createContact: (body: Partial<Contact>) =>
+    j<Contact>('/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   updateContact: (id: string, body: Partial<Contact>) =>
     j<Contact>(`/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  contactObjections: (id: string) =>
+    j<Array<{ objection: string; count: number }>>(`/contacts/${id}/objections`),
+  octamemQuery: (prospect: { name: string; company?: string }) =>
+    j<{ context: string | null }>('/octamem/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prospect }),
+    }),
   calls:           () => j<CallSession[]>('/calls'),
   call:       (id: string) => j<CallSession>(`/calls/${id}`),
   transcript: (id: string) => j<TranscriptLine[]>(`/calls/${id}/transcript`),

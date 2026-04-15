@@ -127,4 +127,23 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     return [...counts.entries()].map(([objection, count]) => ({ objection, count }))
       .sort((a, b) => b.count - a.count);
   });
+
+  // ── Contact-scoped aggregates ──────────────────────────────────────
+
+  app.get('/api/contacts/:id/objections', async (req) => {
+    const id = (req.params as { id: string }).id;
+    const sessions = db.select({ id: callSessions.id })
+      .from(callSessions).where(eq(callSessions.contactId, id)).all();
+    const sessionIds = new Set(sessions.map(s => s.id));
+    const summaries = db.select().from(callSummaries).all()
+      .filter(s => sessionIds.has(s.sessionId));
+    const counts = new Map<string, number>();
+    for (const s of summaries) {
+      const list = JSON.parse(s.objections) as string[];
+      for (const o of list) counts.set(o, (counts.get(o) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([objection, count]) => ({ objection, count }))
+      .sort((a, b) => b.count - a.count);
+  });
 }
