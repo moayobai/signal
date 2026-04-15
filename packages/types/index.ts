@@ -55,8 +55,20 @@ export interface PostCallSummary {
 
 export type CallType = 'investor' | 'enterprise' | 'bd' | 'customer';
 
+export interface Prospect {
+  name: string;
+  company?: string;
+  email?: string;
+  linkedinUrl?: string;
+}
+
 export type ClientMessage =
-  | { type: 'start'; platform: 'meet' | 'zoom' | 'teams'; callType: CallType }
+  | {
+      type: 'start';
+      platform: 'meet' | 'zoom' | 'teams';
+      callType: CallType;
+      prospect: Prospect;
+    }
   | { type: 'stop' };
 
 export type ServerMessage =
@@ -64,4 +76,5 @@ export type ServerMessage =
   | { type: 'transcript'; line: TranscriptLine }
   | { type: 'frame'; frame: SignalFrame }
   | { type: 'state'; overlayState: OverlayState }
+  | { type: 'summary'; summary: PostCallSummary }
   | { type: 'error'; message: string };
