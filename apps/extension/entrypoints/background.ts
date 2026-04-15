@@ -12,7 +12,7 @@ let activeTabId: number | null = null;
 let reconnectAttempt = 0;
 
 export default defineBackground(() => {
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
     if (msg.type === 'PROSPECT_DETECTED') {
       const first = (msg.names as string[]).find(n => n.length > 1);
       if (first) chrome.storage.session.set({ detectedProspect: { name: first } });
@@ -22,7 +22,7 @@ export default defineBackground(() => {
 
     if (msg.type === 'POPUP_START_REQUEST') {
       // User clicked Start Call — kick off capture on last active tab
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]: chrome.tabs.Tab[]) => {
         if (tab?.id != null) {
           activeTabId = tab.id;
           startCapture(() => sendResponse({ ok: true }));
@@ -34,7 +34,7 @@ export default defineBackground(() => {
     if (msg.type === 'START_CAPTURE') {
       // Legacy auto-trigger from content.tsx — only proceed if prospect already present
       activeTabId = sender.tab?.id ?? null;
-      chrome.storage.session.get(['pendingProspect']).then(d => {
+      chrome.storage.session.get(['pendingProspect']).then((d: Record<string, any>) => {
         if (!d.pendingProspect) { sendResponse({ error: 'no prospect — open popup first' }); return; }
         startCapture(sendResponse);
       });
@@ -72,7 +72,7 @@ async function queryOctaMem(prospect: Prospect): Promise<string | null> {
 }
 
 function startCapture(sendResponse: (r: unknown) => void): void {
-  chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+  chrome.tabCapture.capture({ audio: true, video: false }, (stream: MediaStream | null) => {
     if (!stream) {
       sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
       return;
@@ -83,9 +83,9 @@ function startCapture(sendResponse: (r: unknown) => void): void {
 }
 
 async function connectWs(stream: MediaStream): Promise<void> {
-  const { pendingProspect, pendingCallType } = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']);
-  const prospect: Prospect = pendingProspect ?? { name: 'Unknown' };
-  const callType: CallType = pendingCallType ?? 'enterprise';
+  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']) as Record<string, any>;
+  const prospect: Prospect = stored.pendingProspect ?? { name: 'Unknown' };
+  const callType: CallType = stored.pendingCallType ?? 'enterprise';
 
   const ws = new WebSocket(WS_URL);
   wsocket = ws;

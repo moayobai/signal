@@ -14,7 +14,7 @@ function Popup() {
 
   // Load last detected prospect + any stored summary
   useEffect(() => {
-    chrome.storage.session.get(['detectedProspect', 'latestSummary', 'popupView']).then((d) => {
+    chrome.storage.session.get(['detectedProspect', 'latestSummary', 'popupView']).then((d: Record<string, any>) => {
       if (d.detectedProspect) setProspect(p => ({ ...p, ...d.detectedProspect }));
       if (d.latestSummary) setSummary(d.latestSummary);
       if (d.popupView === 'post') setView('post');
