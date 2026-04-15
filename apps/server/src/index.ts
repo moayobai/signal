@@ -54,7 +54,7 @@ registerWsRoute(app, {
   liveModel: LIVE_MODEL,
   summaryModel: SUMMARY_MODEL,
 });
-registerApiRoutes(app, { db });
+registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY });
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' });

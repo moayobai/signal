@@ -29,7 +29,6 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
 
   return (
     <div
-      key={freshKey}
       className={`sig-nudge ${danger ? 'danger' : ''} ${dimmed ? 'dim' : ''}`}
       onMouseEnter={() => setDimmed(false)}
     >

@@ -4,6 +4,7 @@ import Contacts from './pages/Contacts';
 import ContactDetail from './pages/ContactDetail';
 import CallDetail from './pages/CallDetail';
 import { HomeIcon, ContactsIcon } from './components/icons';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
@@ -39,12 +40,14 @@ export default function App() {
       </aside>
 
       <main className="content">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/contacts/:id" element={<ContactDetail />} />
-          <Route path="/calls/:id" element={<CallDetail />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/contacts/:id" element={<ContactDetail />} />
+            <Route path="/calls/:id" element={<CallDetail />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

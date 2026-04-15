@@ -34,6 +34,8 @@ function ago(ms: number): string {
 export function LiveSidebar({
   frame, prevSentiment, cueHistory, transcript, elapsedSeconds, danger, onCollapse,
 }: Props) {
+  // `elapsedSeconds` ticks every second, keeping renders fresh.
+  // Compute `now` at render time so ago() values are accurate.
   const now = Date.now();
   const sentiment = frame?.sentiment ?? null;
   const delta = sentiment != null && prevSentiment != null

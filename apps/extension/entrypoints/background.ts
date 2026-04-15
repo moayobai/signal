@@ -15,7 +15,12 @@ export default defineBackground(() => {
   chrome.runtime.onMessage.addListener((msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
     if (msg.type === 'PROSPECT_DETECTED') {
       const first = (msg.names as string[]).find(n => n.length > 1);
-      if (first) chrome.storage.session.set({ detectedProspect: { name: first } });
+      if (first) {
+        chrome.storage.session.set({
+          detectedProspect: { name: first },
+          pendingPlatform: msg.platform ?? 'meet',
+        });
+      }
       sendResponse({ ok: true });
       return;
     }
@@ -27,16 +32,6 @@ export default defineBackground(() => {
           activeTabId = tab.id;
           startCapture(() => sendResponse({ ok: true }));
         }
-      });
-      return true;
-    }
-
-    if (msg.type === 'START_CAPTURE') {
-      // Legacy auto-trigger from content.tsx — only proceed if prospect already present
-      activeTabId = sender.tab?.id ?? null;
-      chrome.storage.session.get(['pendingProspect']).then((d: Record<string, any>) => {
-        if (!d.pendingProspect) { sendResponse({ error: 'no prospect — open popup first' }); return; }
-        startCapture(sendResponse);
       });
       return true;
     }
@@ -83,16 +78,17 @@ function startCapture(sendResponse: (r: unknown) => void): void {
 }
 
 async function connectWs(stream: MediaStream): Promise<void> {
-  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']) as Record<string, any>;
+  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType', 'pendingPlatform']) as Record<string, any>;
   const prospect: Prospect = stored.pendingProspect ?? { name: 'Unknown' };
   const callType: CallType = stored.pendingCallType ?? 'enterprise';
+  const platform: 'meet' | 'zoom' | 'teams' = stored.pendingPlatform ?? 'meet';
 
   const ws = new WebSocket(WS_URL);
   wsocket = ws;
 
   ws.onopen = () => {
     reconnectAttempt = 0;
-    const startMsg: ClientMessage = { type: 'start', platform: 'meet', callType, prospect };
+    const startMsg: ClientMessage = { type: 'start', platform, callType, prospect };
     ws.send(JSON.stringify(startMsg));
     startRecorder(stream, ws);
   };

@@ -4,11 +4,16 @@ import { desc, eq, sql } from 'drizzle-orm';
 import {
   contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB,
 } from '../services/db.js';
+import { queryProspectContext } from '../services/octamem.js';
 
-export interface ApiRouteOptions { db: DB; }
+export interface ApiRouteOptions { db: DB; octamemApiKey: string; }
+
+function safeParseArray(json: string): string[] {
+  try { return JSON.parse(json) as string[]; } catch { return []; }
+}
 
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
-  const { db } = opts;
+  const { db, octamemApiKey } = opts;
 
   // ── Contacts ───────────────────────────────────────────────────────
 
@@ -80,9 +85,9 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     if (!row) return reply.code(404).send({ error: 'not found' });
     return {
       ...row,
-      winSignals: JSON.parse(row.winSignals),
-      objections: JSON.parse(row.objections),
-      decisions: JSON.parse(row.decisions),
+      winSignals: safeParseArray(row.winSignals),
+      objections: safeParseArray(row.objections),
+      decisions: safeParseArray(row.decisions),
     };
   });
 
@@ -91,11 +96,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   // Popup helper: query OctaMem via server (extension can't hold the key)
   app.post('/api/octamem/query', async (req) => {
     const { prospect } = req.body as { prospect: { name: string; company?: string } };
-    const { queryProspectContext } = await import('../services/octamem.js');
-    const context = await queryProspectContext({
-      apiKey: process.env.OCTAMEM_API_KEY ?? '',
-      prospect,
-    });
+    const context = await queryProspectContext({ apiKey: octamemApiKey, prospect });
     return { context };
   });
 
@@ -121,7 +122,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     const rows = db.select().from(callSummaries).all();
     const counts = new Map<string, number>();
     for (const r of rows) {
-      const list = JSON.parse(r.objections) as string[];
+      const list = safeParseArray(r.objections);
       for (const o of list) counts.set(o, (counts.get(o) ?? 0) + 1);
     }
     return [...counts.entries()].map(([objection, count]) => ({ objection, count }))
@@ -139,7 +140,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
       .filter(s => sessionIds.has(s.sessionId));
     const counts = new Map<string, number>();
     for (const s of summaries) {
-      const list = JSON.parse(s.objections) as string[];
+      const list = safeParseArray(s.objections);
       for (const o of list) counts.set(o, (counts.get(o) ?? 0) + 1);
     }
     return [...counts.entries()]

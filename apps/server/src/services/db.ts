@@ -64,8 +64,10 @@ CREATE TABLE IF NOT EXISTS contacts (
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS call_sessions (
-  id TEXT PRIMARY KEY, contact_id TEXT, platform TEXT NOT NULL,
-  call_type TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
+  id TEXT PRIMARY KEY,
+  contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+  platform TEXT NOT NULL, call_type TEXT NOT NULL,
+  started_at INTEGER NOT NULL, ended_at INTEGER,
   duration_ms INTEGER, sentiment_avg REAL
 );
 CREATE TABLE IF NOT EXISTS transcript_lines (
@@ -83,13 +85,17 @@ CREATE TABLE IF NOT EXISTS call_summaries (
   follow_up_draft TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_call_sessions_contact ON call_sessions(contact_id);
+CREATE INDEX IF NOT EXISTS idx_call_sessions_started ON call_sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_call_sessions_contact_started ON call_sessions(contact_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_transcript_lines_session ON transcript_lines(session_id);
 CREATE INDEX IF NOT EXISTS idx_signal_frames_session ON signal_frames(session_id);
+CREATE INDEX IF NOT EXISTS idx_call_summaries_session ON call_summaries(session_id);
 `;
 
 export function initDb(url: string): DB {
   const sqlite = new Database(url);
   sqlite.pragma('journal_mode = WAL');
+  sqlite.pragma('foreign_keys = ON');
   sqlite.exec(DDL);
   return drizzle(sqlite);
 }

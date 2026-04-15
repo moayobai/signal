@@ -61,6 +61,7 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
         <>
           {showNudge && frame && (
             <NudgeCard
+              key={frameVersion}
               frame={frame}
               danger={danger}
               freshKey={frameVersion}
