@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { CallSession } from '../services/session.js';
 import { createDeepgramClient } from '../services/deepgram.js';
 import { runLiveNudge } from '../services/claude.js';
@@ -40,7 +40,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     let sentimentCount = 0;
     const dangerMoments: Array<{ reason: string; timestamp: number }> = [];
     const collectedTranscript: TranscriptLine[] = [];
-    let ended = false;
+    let stopPromise: Promise<void> | null = null;
 
     function send(msg: ServerMessage): void {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
@@ -54,9 +54,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         if (!session) return;
         session.addLine(line);
         collectedTranscript.push(line);
-        opts.db.insert(transcriptLines).values({
-          sessionId, speaker: line.speaker, text: line.text, timestamp: line.timestamp,
-        }).run();
+        try {
+          opts.db.insert(transcriptLines).values({
+            sessionId, speaker: line.speaker, text: line.text, timestamp: line.timestamp,
+          }).run();
+        } catch (err) {
+          console.error('[SIGNAL] failed to persist transcript line:', err);
+        }
         send({ type: 'transcript', line });
         const danger = session.detectKeyword(line.text);
         if (danger) {
@@ -108,7 +112,11 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           userPrompt: buildUserPrompt(window),
         });
         if (frame) {
-          persistFrame(opts.db, sessionId, frame);
+          try {
+            persistFrame(opts.db, sessionId, frame);
+          } catch (err) {
+            console.error('[SIGNAL] failed to persist frame:', err);
+          }
           sentimentSum += frame.sentiment;
           sentimentCount += 1;
           send({ type: 'frame', frame });
@@ -117,21 +125,29 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       }, CLAUDE_INTERVAL_MS);
     }
 
-    async function onStop(): Promise<void> {
-      if (ended) return;
-      ended = true;
+    function onStop(): Promise<void> {
+      if (stopPromise) return stopPromise;
+      stopPromise = _onStop();
+      return stopPromise;
+    }
+
+    async function _onStop(): Promise<void> {
       if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = null; }
       dg.finish();
 
       const endedAt = Date.now();
       const durationMs = endedAt - startedAt;
-      const sentimentAvg = sentimentCount > 0 ? sentimentSum / sentimentCount : 0;
+      const sentimentAvg = sentimentCount > 0 ? sentimentSum / sentimentCount : null;
 
       // Only update call_sessions if a start row was inserted
       if (session && prospect && contactId) {
-        opts.db.update(callSessions).set({
-          endedAt, durationMs, sentimentAvg,
-        }).where(eq(callSessions.id, sessionId)).run();
+        try {
+          opts.db.update(callSessions).set({
+            endedAt, durationMs, sentimentAvg,
+          }).where(eq(callSessions.id, sessionId)).run();
+        } catch (err) {
+          console.error('[SIGNAL] failed to update call session:', err);
+        }
 
         const summary = await generateSummary({
           ai: opts.ai,
@@ -141,26 +157,34 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         });
 
         if (summary) {
-          opts.db.insert(callSummaries).values({
-            id: randomUUID(),
-            sessionId,
-            winSignals: JSON.stringify(summary.winSignals),
-            objections: JSON.stringify(summary.objections),
-            decisions: JSON.stringify(summary.decisions),
-            followUpDraft: summary.followUpDraft,
-            createdAt: endedAt,
-          }).run();
+          try {
+            opts.db.insert(callSummaries).values({
+              id: randomUUID(),
+              sessionId,
+              winSignals: JSON.stringify(summary.winSignals),
+              objections: JSON.stringify(summary.objections),
+              decisions: JSON.stringify(summary.decisions),
+              followUpDraft: summary.followUpDraft,
+              createdAt: endedAt,
+            }).run();
+          } catch (err) {
+            console.error('[SIGNAL] failed to persist summary:', err);
+          }
 
-          const newMemId = await storeCallMemory({
-            apiKey: opts.octamemApiKey,
-            contact: { name: prospect.name, company: prospect.company },
-            callType, durationMs, sentimentAvg,
-            summary, dangerMoments,
-            previousOctamemId: previousOctamemId ?? undefined,
-          });
-          if (newMemId) {
-            opts.db.update(contacts).set({ octamemId: newMemId, updatedAt: endedAt })
-              .where(eq(contacts.id, contactId)).run();
+          try {
+            const newMemId = await storeCallMemory({
+              apiKey: opts.octamemApiKey,
+              contact: { name: prospect.name, company: prospect.company },
+              callType, durationMs, sentimentAvg: sentimentAvg ?? 0,
+              summary, dangerMoments,
+              previousOctamemId: previousOctamemId ?? undefined,
+            });
+            if (newMemId) {
+              opts.db.update(contacts).set({ octamemId: newMemId, updatedAt: endedAt })
+                .where(eq(contacts.id, contactId)).run();
+            }
+          } catch (err) {
+            console.error('[SIGNAL] failed to store call memory:', err);
           }
 
           send({ type: 'summary', summary });
@@ -190,16 +214,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
 async function upsertContact(db: DB, prospect: Prospect): Promise<string> {
   const now = Date.now();
-  const existing = db.select().from(contacts).where(
-    prospect.company
-      ? and(eq(contacts.name, prospect.name), eq(contacts.company, prospect.company))
-      : eq(contacts.name, prospect.name),
-  ).get();
+  const existing = prospect.company
+    ? db.select().from(contacts).where(and(eq(contacts.name, prospect.name), eq(contacts.company, prospect.company))).get()
+    : db.select().from(contacts).where(and(eq(contacts.name, prospect.name), isNull(contacts.company))).get();
   if (existing) {
     db.update(contacts).set({
       email: prospect.email ?? existing.email,
       linkedinUrl: prospect.linkedinUrl ?? existing.linkedinUrl,
-      company: prospect.company ?? existing.company,
       updatedAt: now,
     }).where(eq(contacts.id, existing.id)).run();
     return existing.id;
