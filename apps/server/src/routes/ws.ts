@@ -14,6 +14,10 @@ import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLin
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
+/** Hard cap on in-memory transcript to prevent unbounded growth on long calls. */
+const MAX_TRANSCRIPT_LINES = 5_000;
+
+type CallState = 'IDLE' | 'STARTING' | 'ACTIVE' | 'STOPPING' | 'STOPPED';
 
 export interface WsRouteOptions {
   db: DB;
@@ -45,6 +49,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     const dangerMoments: Array<{ reason: string; timestamp: number }> = [];
     const collectedTranscript: TranscriptLine[] = [];
     let stopPromise: Promise<void> | null = null;
+    let callState: CallState = 'IDLE';
 
     function send(msg: ServerMessage): void {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
@@ -56,9 +61,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       apiKey: opts.deepgramApiKey,
       model: opts.deepgramModel ?? 'nova-3',
       onTranscript: (line) => {
-        if (!session) return;
+        if (!session || callState !== 'ACTIVE') return;
         session.addLine(line);
         collectedTranscript.push(line);
+        // Bound in-memory growth on long calls (DB has the full history)
+        if (collectedTranscript.length > MAX_TRANSCRIPT_LINES) {
+          collectedTranscript.splice(0, collectedTranscript.length - MAX_TRANSCRIPT_LINES);
+        }
         try {
           opts.db.insert(transcriptLines).values({
             sessionId, speaker: line.speaker, text: line.text, timestamp: line.timestamp,
@@ -86,6 +95,11 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     });
 
     async function onStart(msg: Extract<ClientMessage, { type: 'start' }>): Promise<void> {
+      if (callState !== 'IDLE') {
+        console.warn('[SIGNAL] onStart called in state', callState, '— ignoring');
+        return;
+      }
+      callState = 'STARTING';
       platform = msg.platform;
       callType = msg.callType;
       prospect = msg.prospect;
@@ -108,20 +122,25 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       });
 
       systemPrompt = buildSystemPrompt(callType, octamemContext);
+      callState = 'ACTIVE';
       send({ type: 'state', overlayState: 'LIVE' });
 
+      // Guard rail: prevent overlapping Claude calls if one hangs past the 12s tick.
+      let nudgeInFlight = false;
       claudeTimer = setInterval(async () => {
-        if (!session) return;
+        if (!session || callState !== 'ACTIVE' || nudgeInFlight) return;
         if (session.newLinesSinceLastCall < MIN_NEW_LINES) return;
         const window = session.getWindow();
         session.resetNewLines();
         if (session.isSilent()) send({ type: 'state', overlayState: 'DANGER' });
+        nudgeInFlight = true;
         const frame = await runLiveNudge({
           ai: opts.ai,
           model: opts.liveModel,
           systemPrompt,
           userPrompt: buildUserPrompt(window),
-        });
+        }).catch(err => { console.error('[SIGNAL] runLiveNudge failed:', err); return null; })
+          .finally(() => { nudgeInFlight = false; });
         if (frame) {
           // Attach latest Hume face signals if available
           const enrichedFrame: SignalFrame = latestFaceSignals
@@ -147,6 +166,8 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     }
 
     async function _onStop(): Promise<void> {
+      if (callState === 'STOPPED') return;
+      callState = 'STOPPING';
       if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = null; }
       dg.finish();
       hume.close();
@@ -207,14 +228,24 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           send({ type: 'state', overlayState: 'POSTCALL' });
         }
       }
+      callState = 'STOPPED';
     }
 
     socket.on('message', (rawData) => {
       const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData as ArrayBuffer);
       try {
         const msg = JSON.parse(data.toString()) as ClientMessage;
-        if (msg.type === 'start') { void onStart(msg); return; }
-        if (msg.type === 'stop') { void onStop(); return; }
+        if (msg.type === 'start') {
+          onStart(msg).catch(err => {
+            console.error('[SIGNAL] onStart failed:', err);
+            send({ type: 'error', message: 'Failed to start session' });
+          });
+          return;
+        }
+        if (msg.type === 'stop') {
+          onStop().catch(err => console.error('[SIGNAL] onStop failed:', err));
+          return;
+        }
         if (msg.type === 'video_frame') { hume.sendFrame(msg.data); return; }
       } catch {
         // Binary = audio chunk → forward to Deepgram
@@ -222,10 +253,12 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       }
     });
 
-    socket.on('close', () => { void onStop(); });
+    socket.on('close', () => {
+      onStop().catch(err => console.error('[SIGNAL] onStop (close) failed:', err));
+    });
     socket.on('error', (err) => {
       console.error('[SIGNAL] WS socket error:', err);
-      void onStop();
+      onStop().catch(e => console.error('[SIGNAL] onStop (error) failed:', e));
     });
   });
 }

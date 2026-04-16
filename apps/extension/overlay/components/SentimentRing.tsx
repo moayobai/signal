@@ -39,7 +39,7 @@ export function SentimentRing({ value, size = 72, stroke = 5, showLabel = true }
             strokeDasharray={c}
             strokeDashoffset={offset}
             style={{
-              transition: 'stroke-dashoffset 700ms cubic-bezier(0.2, 0.8, 0.25, 1)',
+              transition: 'stroke-dashoffset 420ms cubic-bezier(0.34, 1.56, 0.64, 1)',
               filter: 'drop-shadow(0 0 6px currentColor)',
             }}
           />

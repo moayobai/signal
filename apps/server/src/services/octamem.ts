@@ -9,6 +9,20 @@ function isPlaceholder(key: string): boolean {
 
 function baseUrl(): string { return process.env.OCTAMEM_BASE_URL ?? DEFAULT_BASE; }
 
+/** Fetch with hard timeout — OctaMem failures must never block the call flow. */
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const QUERY_TIMEOUT_MS = 5_000;
+const STORE_TIMEOUT_MS = 10_000;
+
 export interface QueryOpts {
   apiKey: string;
   prospect: { name: string; company?: string };
@@ -19,11 +33,11 @@ export async function queryProspectContext(opts: QueryOpts): Promise<string | nu
   if (isPlaceholder(opts.apiKey)) return null;
   const query = `${opts.prospect.name}${opts.prospect.company ? ' at ' + opts.prospect.company : ''} — what do we know?`;
   try {
-    const res = await fetch(`${baseUrl()}/v1/query`, {
+    const res = await fetchWithTimeout(`${baseUrl()}/v1/query`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, previousContext: opts.previousOctamemId }),
-    });
+    }, QUERY_TIMEOUT_MS);
     if (!res.ok) return null;
     const data = await res.json() as { result?: string };
     return data.result ?? null;
@@ -67,11 +81,11 @@ function formatMemory(o: StoreOpts): string {
 export async function storeCallMemory(opts: StoreOpts): Promise<string | null> {
   if (isPlaceholder(opts.apiKey)) return null;
   try {
-    const res = await fetch(`${baseUrl()}/v1/add`, {
+    const res = await fetchWithTimeout(`${baseUrl()}/v1/add`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: formatMemory(opts), previousContext: opts.previousOctamemId }),
-    });
+    }, STORE_TIMEOUT_MS);
     if (!res.ok) return null;
     const data = await res.json() as { id?: string };
     return data.id ?? null;

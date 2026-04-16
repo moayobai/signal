@@ -61,6 +61,21 @@ registerWsRoute(app, {
 });
 registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY });
 
+// Graceful shutdown: drain in-flight WebSocket sessions before exiting.
+// Fly.io / systemd / Docker all send SIGTERM before SIGKILL.
+async function shutdown(signal: string): Promise<void> {
+  app.log.info(`[SIGNAL] ${signal} received — draining connections`);
+  try {
+    await app.close();
+    process.exit(0);
+  } catch (err) {
+    app.log.error({ err }, '[SIGNAL] shutdown failed');
+    process.exit(1);
+  }
+}
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.on('SIGINT',  () => { void shutdown('SIGINT'); });
+
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' });
   app.log.info(`[SIGNAL] AI provider: ${AI_PROVIDER}, DB: ${DATABASE_URL}`);

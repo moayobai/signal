@@ -84,7 +84,7 @@ export function LiveSidebar({
   const delta = sentiment != null && prevSentiment != null
     ? Math.round(sentiment - prevSentiment)
     : null;
-  const tail = transcript.slice(-2);
+  const tail = transcript.slice(-5);
 
   return (
     <aside className={`sig-sidebar ${danger ? 'danger' : ''}`}>

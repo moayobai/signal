@@ -11,10 +11,15 @@
   --sig-ink-3: rgba(255, 255, 255, 0.40);
   --sig-ink-4: rgba(255, 255, 255, 0.22);
 
-  --sig-glass-bg:    rgba(16, 16, 20, 0.58);
-  --sig-glass-bg-2:  rgba(16, 16, 20, 0.42);
-  --sig-glass-border: rgba(255, 255, 255, 0.10);
-  --sig-glass-inset:  rgba(255, 255, 255, 0.12);
+  /* Bumped opacity from 0.58 → 0.68 for consistent WCAG AA contrast on
+     bright video backgrounds. Ink stays the same (0.96). */
+  --sig-glass-bg:    rgba(14, 14, 18, 0.68);
+  --sig-glass-bg-2:  rgba(14, 14, 18, 0.52);
+  --sig-glass-border: rgba(255, 255, 255, 0.14);
+  --sig-glass-inset:  rgba(255, 255, 255, 0.14);
+
+  /* Signature SIGNAL spectrum — indigo → cyan → amber */
+  --sig-grad-signal: linear-gradient(135deg, #6366f1 0%, #22d3ee 55%, #f5a524 100%);
 
   --sig-accent:    #f5a524;
   --sig-pos:       #34d399;
@@ -79,24 +84,27 @@
     0 0 0 1px rgba(251, 113, 133, 0.35),
     0 0 60px -12px rgba(251, 113, 133, 0.45),
     inset 0 1px 0 var(--sig-glass-inset);
-  animation: sig-nudge-in 380ms cubic-bezier(0.2, 0.8, 0.25, 1) both,
-             sig-danger-pulse 2s ease-in-out infinite 380ms;
+  animation: sig-nudge-in 380ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  position: fixed; /* keep for ::after anchor */
+}
+/* Pulse via opacity on pseudo-element — avoids box-shadow thrash */
+.sig-nudge.danger::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 60px -8px rgba(251, 113, 133, 0.7);
+  opacity: 0.4;
+  animation: sig-danger-pulse 2s ease-in-out infinite 380ms;
 }
 @keyframes sig-nudge-in {
   from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 @keyframes sig-danger-pulse {
-  0%, 100% { box-shadow:
-    var(--sig-shadow-lg),
-    0 0 0 1px rgba(251, 113, 133, 0.35),
-    0 0 60px -12px rgba(251, 113, 133, 0.45),
-    inset 0 1px 0 var(--sig-glass-inset); }
-  50%      { box-shadow:
-    var(--sig-shadow-lg),
-    0 0 0 1px rgba(251, 113, 133, 0.60),
-    0 0 90px -8px rgba(251, 113, 133, 0.70),
-    inset 0 1px 0 var(--sig-glass-inset); }
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.85; }
 }
 
 .sig-nudge .head {
@@ -127,16 +135,22 @@
   color: var(--sig-ink-3);
 }
 .sig-nudge .dismiss {
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: var(--sig-ink-3);
-  border-radius: 6px;
+  padding: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--sig-ink-2);
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
-.sig-nudge .dismiss:hover { color: var(--sig-ink-1); background: rgba(255,255,255,0.06); }
+.sig-nudge .dismiss:hover {
+  color: var(--sig-ink-1);
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.22);
+}
+.sig-nudge .dismiss:active { transform: scale(0.94); }
 
 .sig-nudge .body {
   font-size: 15px;
@@ -583,4 +597,29 @@
   line-height: 1.6;
   white-space: pre-wrap;
   color: var(--sig-ink-1);
+}
+
+/* ============================================================
+   Accessibility — focus states + reduced motion
+   ============================================================ */
+
+.sig-root button:focus-visible,
+.sig-root [role="button"]:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* Honour user preference: cut animations to near-zero while keeping
+   layout/opacity changes instantaneous. Keyboard users with vestibular
+   sensitivity still get a fully functional HUD. */
+@media (prefers-reduced-motion: reduce) {
+  .sig-root *,
+  .sig-root *::before,
+  .sig-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .sig-nudge.danger::after { animation: none; opacity: 0.6; }
 }

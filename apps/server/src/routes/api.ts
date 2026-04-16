@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB,
 } from '../services/db.js';
@@ -12,6 +13,23 @@ function safeParseArray(json: string): string[] {
   try { return JSON.parse(json) as string[]; } catch { return []; }
 }
 
+// ── Request body schemas ─────────────────────────────────────────────
+const ContactCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email().max(320).optional(),
+  linkedinUrl: z.string().url().max(500).optional(),
+  company: z.string().max(200).optional(),
+  role: z.string().max(200).optional(),
+  notes: z.string().max(5000).optional(),
+});
+const ContactUpdateSchema = ContactCreateSchema.partial();
+const OctaMemQuerySchema = z.object({
+  prospect: z.object({
+    name: z.string().min(1).max(200),
+    company: z.string().max(200).optional(),
+  }),
+});
+
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
   const { db, octamemApiKey } = opts;
 
@@ -20,8 +38,11 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   app.get('/api/contacts', async () => db.select().from(contacts).all());
 
   app.post('/api/contacts', async (req, reply) => {
-    const body = req.body as Partial<typeof contacts.$inferInsert>;
-    if (!body.name) return reply.code(400).send({ error: 'name required' });
+    const parsed = ContactCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid body', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const now = Date.now();
     const id = randomUUID();
     const row = {
@@ -43,9 +64,12 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   app.put('/api/contacts/:id', async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const existing = db.select().from(contacts).where(eq(contacts.id, id)).get();
-    if (!existing) return reply.code(404).send({ error: 'not found' });
-    const body = req.body as Partial<typeof contacts.$inferInsert>;
-    const patch = { ...existing, ...body, id, updatedAt: Date.now() };
+    if (!existing) return reply.code(404).send({ error: 'Contact not found' });
+    const parsed = ContactUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid body', details: parsed.error.issues });
+    }
+    const patch = { ...existing, ...parsed.data, id, updatedAt: Date.now() };
     db.update(contacts).set(patch).where(eq(contacts.id, id)).run();
     return patch;
   });
@@ -94,9 +118,12 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   // ── OctaMem ────────────────────────────────────────────────────────
 
   // Popup helper: query OctaMem via server (extension can't hold the key)
-  app.post('/api/octamem/query', async (req) => {
-    const { prospect } = req.body as { prospect: { name: string; company?: string } };
-    const context = await queryProspectContext({ apiKey: octamemApiKey, prospect });
+  app.post('/api/octamem/query', async (req, reply) => {
+    const parsed = OctaMemQuerySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid body', details: parsed.error.issues });
+    }
+    const context = await queryProspectContext({ apiKey: octamemApiKey, prospect: parsed.data.prospect });
     return { context };
   });
 
@@ -135,9 +162,11 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     const id = (req.params as { id: string }).id;
     const sessions = db.select({ id: callSessions.id })
       .from(callSessions).where(eq(callSessions.contactId, id)).all();
-    const sessionIds = new Set(sessions.map(s => s.id));
-    const summaries = db.select().from(callSummaries).all()
-      .filter(s => sessionIds.has(s.sessionId));
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length === 0) return [];
+    // Single indexed query (previously loaded all summaries then filtered in-memory)
+    const summaries = db.select().from(callSummaries)
+      .where(inArray(callSummaries.sessionId, sessionIds)).all();
     const counts = new Map<string, number>();
     for (const s of summaries) {
       const list = safeParseArray(s.objections);
