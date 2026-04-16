@@ -10,6 +10,10 @@ dist/
 .env.*.local
 .turbo/
 
+# Claude Code local session state
+.claude/settings.local.json
+.claude/launch.json
+
 # Server build & data
 apps/server/public/assets/
 apps/server/public/index.html
