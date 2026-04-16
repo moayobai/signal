@@ -66,7 +66,12 @@
       "Bash(python3 -m http.server 5174)",
       "Bash(curl -sI http://localhost:5174/harness.html)",
       "Bash(gh auth:*)",
-      "Read(//Users/mahomedayob/.config/gh/**)"
+      "Read(//Users/mahomedayob/.config/gh/**)",
+      "Bash(~/.local/bin/pnpm --filter server typecheck)",
+      "Bash(~/.local/bin/pnpm --filter extension typecheck)",
+      "Bash(~/.local/bin/pnpm --filter dashboard typecheck)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

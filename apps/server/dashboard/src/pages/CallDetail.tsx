@@ -1,9 +1,10 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { userFacingLabel } from '@signal/types';
 import { api } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
-import { CheckIcon, WarnIcon, TargetIcon, CopyIcon, SparkIcon } from '../components/icons';
+import { CheckIcon, WarnIcon, TargetIcon, CopyIcon, SparkIcon, PencilIcon } from '../components/icons';
 
 const TYPE_TAG: Record<string, string> = {
   investor: 'tag-investor', enterprise: 'tag-enterprise',
@@ -24,18 +25,59 @@ export default function CallDetail() {
   const transcriptQ = useQuery({ queryKey: ['transcript', id], queryFn: () => api.transcript(id) });
   const framesQ     = useQuery({ queryKey: ['frames', id], queryFn: () => api.frames(id) });
   const summaryQ    = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id), retry: false });
+  const contactQ    = useQuery({
+    queryKey: ['contact', callQ.data?.contactId],
+    queryFn: () => api.contact(callQ.data!.contactId!),
+    enabled: !!callQ.data?.contactId,
+    retry: false,
+  });
   const [copied, setCopied] = useState(false);
+  const [expandedFrames, setExpandedFrames] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    if (summaryQ.data) setDraft(summaryQ.data.followUpDraft);
+  }, [summaryQ.data]);
+
+  function toggleFrame(fid: number) {
+    setExpandedFrames(prev => {
+      const next = new Set(prev);
+      if (next.has(fid)) next.delete(fid);
+      else next.add(fid);
+      return next;
+    });
+  }
+
+  function fmtOffset(ms: number): string {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const mm = Math.floor(s / 60).toString().padStart(2, '0');
+    const ss = (s % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
 
   if (!callQ.data) {
-    return <div className="loading" style={{ height: 260 }} />;
+    return (
+      <div>
+        <div className="skel-title" style={{ marginBottom: 18 }} />
+        <div className="skel-card" />
+      </div>
+    );
   }
   const call = callQ.data;
+  const prospectLabel = contactQ.data?.name ?? 'Prospect';
 
   function copyFollowUp() {
-    if (!summaryQ.data) return;
-    navigator.clipboard.writeText(summaryQ.data.followUpDraft);
+    navigator.clipboard.writeText(draft);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function speakerLabel(speaker: string): string {
+    const s = speaker.toLowerCase();
+    if (s === 'user' || s === 'me' || s === 'self') return 'You';
+    if (s === 'prospect' || s === 'them' || s === 'other') return prospectLabel;
+    return speaker;
   }
 
   return (
@@ -53,6 +95,10 @@ export default function CallDetail() {
               </span>
             </div>
           </div>
+          <TalkRatioCard
+            talkRatio={call.talkRatio ?? null}
+            longestMonologueMs={call.longestMonologueMs ?? null}
+          />
         </div>
       </header>
 
@@ -85,14 +131,34 @@ export default function CallDetail() {
             </article>
           </div>
 
-          <article className="followup-card">
+          <article className={`followup-card ${editing ? 'editing' : ''}`}>
             <div className="head">
               <h3>Follow-up draft</h3>
-              <button className="btn" onClick={copyFollowUp}>
-                <CopyIcon size={13} /> {copied ? 'Copied' : 'Copy'}
-              </button>
+              <div className="head-actions">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setEditing(e => !e)}
+                  aria-label={editing ? 'Finish editing' : 'Edit draft'}
+                  title={editing ? 'Done editing' : 'Edit draft'}
+                >
+                  {editing ? <CheckIcon size={13} /> : <PencilIcon size={13} />}
+                  {editing ? 'Done' : 'Edit'}
+                </button>
+                <button className="btn" onClick={copyFollowUp}>
+                  <CopyIcon size={13} /> {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             </div>
-            <div className="body">{summaryQ.data.followUpDraft}</div>
+            {editing ? (
+              <textarea
+                className="body"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                autoFocus
+              />
+            ) : (
+              <div className="body">{draft}</div>
+            )}
           </article>
         </>
       ) : (
@@ -112,7 +178,7 @@ export default function CallDetail() {
             <div className="empty"><p>Transcript was not captured for this call.</p></div>
           ) : transcriptQ.data?.map(l => (
             <div className="line" key={l.id}>
-              <span className={`speaker ${l.speaker}`}>{l.speaker}</span>
+              <span className={`speaker ${l.speaker}`}>{speakerLabel(l.speaker)}</span>
               <span className="text">{l.text}</span>
             </div>
           ))}
@@ -127,17 +193,101 @@ export default function CallDetail() {
         <div className="frames">
           {framesQ.data?.length === 0 ? (
             <div className="empty"><p>No signals fired during this call.</p></div>
-          ) : framesQ.data?.map(f => (
-            <div className={`frame-row ${f.dangerFlag ? 'danger' : ''}`} key={f.id}>
-              <span className={`pt-badge pt-${f.promptType}`}>{f.promptType}</span>
-              <span className="frame-text">{f.promptText}</span>
-              <span className="conf">conf {f.confidence.toFixed(2)}</span>
-              <span className="sent">sent {f.sentiment}</span>
-              <span className="danger">{f.dangerFlag ? '!' : ''}</span>
-            </div>
-          ))}
+          ) : framesQ.data?.map(f => {
+            const expanded = expandedFrames.has(f.id);
+            return (
+              <div className={`frame-row ${f.dangerFlag ? 'danger' : ''}`} key={f.id}>
+                <span className="tstamp">{fmtOffset(f.offsetMs)}</span>
+                <span className={`pt-badge pt-${f.promptType}`}>{userFacingLabel(f.promptType)}</span>
+                <span className="frame-text">{f.promptText}</span>
+                <button
+                  className="frame-expand"
+                  onClick={() => toggleFrame(f.id)}
+                  aria-label={expanded ? 'Hide details' : 'Show details'}
+                  title={expanded ? 'Hide details' : 'Show details'}
+                  style={{
+                    background: 'transparent', border: '1px solid var(--glass-border)',
+                    width: 22, height: 22, borderRadius: 999, color: 'var(--ink-3)', cursor: 'pointer',
+                  }}
+                >
+                  {expanded ? '×' : '…'}
+                </button>
+                <span className="sent">sent {f.sentiment}</span>
+                <span className="danger">{f.dangerFlag ? '!' : ''}</span>
+                {expanded && (
+                  <div className="frame-details">
+                    <span className="conf">conf {f.confidence.toFixed(2)}</span>
+                    <span className="sent">sent {f.sentiment}</span>
+                    <span className="raw-type">type {f.promptType}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </article>
+    </div>
+  );
+}
+
+function talkRatioHint(ratio: number): { label: string; color: string } {
+  const pct = ratio * 100;
+  if (pct > 65) return { label: 'Target: 45% talk time', color: '#ef4444' };
+  if (pct > 55) return { label: 'Target: 45% talk time', color: '#f5a524' };
+  if (pct >= 35) return { label: 'Target: 45% talk time', color: '#22c55e' };
+  return { label: 'Target: 45% talk time', color: '#f5a524' };
+}
+
+function fmtMonologue(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, '0')}`;
+}
+
+function TalkRatioCard({
+  talkRatio, longestMonologueMs,
+}: { talkRatio: number | null; longestMonologueMs: number | null }) {
+  if (talkRatio == null) {
+    return (
+      <div className="talk-ratio-card" style={{
+        marginLeft: 'auto', minWidth: 220, padding: '12px 14px',
+        borderRadius: 12, background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}>
+        <div className="muted" style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+          Talk ratio
+        </div>
+        <div style={{ fontSize: 13, marginTop: 6 }} className="muted">—</div>
+      </div>
+    );
+  }
+  const userPct = Math.round(talkRatio * 100);
+  const prospectPct = 100 - userPct;
+  const hint = talkRatioHint(talkRatio);
+  return (
+    <div className="talk-ratio-card" style={{
+      marginLeft: 'auto', minWidth: 240, padding: '12px 14px',
+      borderRadius: 12, background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <div className="muted" style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 }}>
+        Talk ratio
+      </div>
+      <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
+        <div style={{ flexBasis: `${userPct}%`, background: 'var(--accent)' }} />
+        <div style={{ flexBasis: `${prospectPct}%`, background: '#3b82f6' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, fontFamily: 'var(--font-mono)' }}>
+        <span style={{ color: 'var(--accent)' }}>YOU {userPct}%</span>
+        <span style={{ color: '#3b82f6' }}>PROSPECT {prospectPct}%</span>
+      </div>
+      {longestMonologueMs != null && (
+        <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+          Longest monologue: {fmtMonologue(longestMonologueMs)}
+        </div>
+      )}
+      <div style={{ fontSize: 11, marginTop: 4, color: hint.color }}>{hint.label}</div>
     </div>
   );
 }

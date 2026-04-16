@@ -100,7 +100,18 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   app.get('/api/calls/:id/frames', async (req) => {
     const id = (req.params as { id: string }).id;
-    return db.select().from(signalFrames).where(eq(signalFrames.sessionId, id)).all();
+    const rows = db.select().from(signalFrames)
+      .where(eq(signalFrames.sessionId, id))
+      .orderBy(signalFrames.createdAt)
+      .all();
+    // Add `timestamp` alias and relative offset from call start for UI
+    const call = db.select().from(callSessions).where(eq(callSessions.id, id)).get();
+    const startedAt = call?.startedAt ?? (rows[0]?.createdAt ?? 0);
+    return rows.map(r => ({
+      ...r,
+      timestamp: r.createdAt,
+      offsetMs: Math.max(0, r.createdAt - startedAt),
+    }));
   });
 
   app.get('/api/calls/:id/summary', async (req, reply) => {

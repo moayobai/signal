@@ -24,6 +24,10 @@ export const callSessions = sqliteTable('call_sessions', {
   endedAt: integer('ended_at'),
   durationMs: integer('duration_ms'),
   sentimentAvg: real('sentiment_avg'),
+  userWords: integer('user_words'),
+  prospectWords: integer('prospect_words'),
+  talkRatio: real('talk_ratio'),
+  longestMonologueMs: integer('longest_monologue_ms'),
 });
 
 export const transcriptLines = sqliteTable('transcript_lines', {
@@ -68,7 +72,9 @@ CREATE TABLE IF NOT EXISTS call_sessions (
   contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
   platform TEXT NOT NULL, call_type TEXT NOT NULL,
   started_at INTEGER NOT NULL, ended_at INTEGER,
-  duration_ms INTEGER, sentiment_avg REAL
+  duration_ms INTEGER, sentiment_avg REAL,
+  user_words INTEGER, prospect_words INTEGER,
+  talk_ratio REAL, longest_monologue_ms INTEGER
 );
 CREATE TABLE IF NOT EXISTS transcript_lines (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
@@ -97,5 +103,15 @@ export function initDb(url: string): DB {
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.exec(DDL);
+  // Backfill columns on existing DBs — SQLite throws if the column exists, ignore.
+  const additions = [
+    'ALTER TABLE call_sessions ADD COLUMN user_words INTEGER',
+    'ALTER TABLE call_sessions ADD COLUMN prospect_words INTEGER',
+    'ALTER TABLE call_sessions ADD COLUMN talk_ratio REAL',
+    'ALTER TABLE call_sessions ADD COLUMN longest_monologue_ms INTEGER',
+  ];
+  for (const stmt of additions) {
+    try { sqlite.exec(stmt); } catch { /* column already exists */ }
+  }
   return drizzle(sqlite);
 }

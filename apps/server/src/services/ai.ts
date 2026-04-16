@@ -18,8 +18,22 @@ function isPlaceholder(key: string): boolean {
   return PLACEHOLDER_PREFIXES.some(p => key.startsWith(p));
 }
 
+/**
+ * Error message surfaced when the AI provider is disabled (placeholder
+ * or missing API keys). Retained export so callers/tests can reference it.
+ */
+export const AI_DISABLED =
+  '[SIGNAL] AI_PROVIDER disabled — no nudges will fire. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.';
+
 export class NoOpProvider implements AIProvider {
-  async complete(_opts: AICompleteOpts): Promise<string | null> { return null; }
+  private warned = false;
+  async complete(_opts: AICompleteOpts): Promise<string | null> {
+    if (!this.warned) {
+      console.warn(AI_DISABLED);
+      this.warned = true;
+    }
+    return null;
+  }
 }
 
 export class ClaudeProvider implements AIProvider {
@@ -81,9 +95,15 @@ export interface AIConfig {
 
 export function createAIProvider(config: AIConfig): AIProvider {
   if (config.provider === 'openrouter') {
-    if (isPlaceholder(config.openrouterApiKey)) return new NoOpProvider();
+    if (isPlaceholder(config.openrouterApiKey)) {
+      console.warn(AI_DISABLED);
+      return new NoOpProvider();
+    }
     return new OpenRouterProvider(config.openrouterApiKey);
   }
-  if (isPlaceholder(config.anthropicApiKey)) return new NoOpProvider();
+  if (isPlaceholder(config.anthropicApiKey)) {
+    console.warn(AI_DISABLED);
+    return new NoOpProvider();
+  }
   return new ClaudeProvider(config.anthropicApiKey);
 }

@@ -178,9 +178,14 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
       // Only update call_sessions if a start row was inserted
       if (session && prospect && contactId) {
+        const talk = computeTalkRatio(collectedTranscript);
         try {
           opts.db.update(callSessions).set({
             endedAt, durationMs, sentimentAvg,
+            userWords: talk.userWords,
+            prospectWords: talk.prospectWords,
+            talkRatio: talk.talkRatio,
+            longestMonologueMs: talk.longestMonologueMs,
           }).where(eq(callSessions.id, sessionId)).run();
         } catch (err) {
           console.error('[SIGNAL] failed to update call session:', err);
@@ -282,6 +287,57 @@ async function upsertContact(db: DB, prospect: Prospect): Promise<string> {
     company: prospect.company, createdAt: now, updatedAt: now,
   }).run();
   return id;
+}
+
+interface TalkRatioStats {
+  userWords: number;
+  prospectWords: number;
+  talkRatio: number | null;
+  longestMonologueMs: number | null;
+}
+
+function countWords(text: string): number {
+  const t = text.trim();
+  if (!t) return 0;
+  return t.split(/\s+/).length;
+}
+
+function computeTalkRatio(lines: TranscriptLine[]): TalkRatioStats {
+  let userWords = 0;
+  let prospectWords = 0;
+  for (const l of lines) {
+    const n = countWords(l.text);
+    if (l.speaker === 'user') userWords += n;
+    else if (l.speaker === 'prospect') prospectWords += n;
+  }
+  const total = userWords + prospectWords;
+  const talkRatio = total > 0 ? userWords / total : null;
+
+  // Longest monologue: consecutive run of same-speaker lines, measured as
+  // (last line timestamp - first line timestamp) within the run.
+  let longestMonologueMs: number | null = null;
+  let runSpeaker: string | null = null;
+  let runStart = 0;
+  let runEnd = 0;
+  for (const l of lines) {
+    if (l.speaker !== runSpeaker) {
+      if (runSpeaker !== null) {
+        const delta = runEnd - runStart;
+        if (longestMonologueMs === null || delta > longestMonologueMs) longestMonologueMs = delta;
+      }
+      runSpeaker = l.speaker;
+      runStart = l.timestamp;
+      runEnd = l.timestamp;
+    } else {
+      runEnd = l.timestamp;
+    }
+  }
+  if (runSpeaker !== null) {
+    const delta = runEnd - runStart;
+    if (longestMonologueMs === null || delta > longestMonologueMs) longestMonologueMs = delta;
+  }
+
+  return { userWords, prospectWords, talkRatio, longestMonologueMs };
 }
 
 function persistFrame(db: DB, sessionId: string, frame: SignalFrame): void {

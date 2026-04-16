@@ -105,3 +105,10 @@ export const CopyIcon = ({ size, stroke }: Props) => (
     <path d="M3 11V3.5A.5.5 0 013.5 3H10" />
   </svg>
 );
+
+export const PencilIcon = ({ size, stroke }: Props) => (
+  <svg {...base(size, stroke)}>
+    <path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z" />
+    <path d="M10 4l2 2" />
+  </svg>
+);

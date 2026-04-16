@@ -91,7 +91,20 @@ export function LiveSidebar({
       {/* Header */}
       <div className="head">
         <div className="brand">
-          <span className="dot" />
+          <span className="dot" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <defs>
+                <linearGradient id="sig-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="55%" stopColor="#22d3ee" />
+                  <stop offset="100%" stopColor="#f5a524" />
+                </linearGradient>
+              </defs>
+              <circle cx="6" cy="6" r="5.25" stroke="url(#sig-brand-grad)" strokeWidth="1.2" />
+              <circle cx="6.85" cy="5.65" r="3.35" stroke="url(#sig-brand-grad)" strokeWidth="1.2" />
+              <circle cx="6" cy="6" r="1.2" fill="url(#sig-brand-grad)" />
+            </svg>
+          </span>
           <span>Signal</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

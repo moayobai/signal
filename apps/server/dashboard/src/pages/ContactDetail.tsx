@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useMemo } from 'react';
 import { api, type CallSession } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
-import { ArrowRightIcon, SparkIcon, WarnIcon } from '../components/icons';
+import { ArrowRightIcon, SparkIcon, WarnIcon, CloseIcon } from '../components/icons';
 
 const TYPE_TAG: Record<string, string> = {
   investor: 'tag-investor', enterprise: 'tag-enterprise',
@@ -36,9 +36,16 @@ export default function ContactDetail() {
     });
   }, [contactQ.data]);
 
+  const [toast, setToast] = useState(false);
+  const [filterObjection, setFilterObjection] = useState<string | null>(null);
+
   const update = useMutation({
     mutationFn: (body: Partial<typeof form>) => api.updateContact(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contact', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contact', id] });
+      setToast(true);
+      setTimeout(() => setToast(false), 2500);
+    },
   });
 
   const myCalls = useMemo<CallSession[]>(
@@ -64,8 +71,8 @@ export default function ContactDetail() {
   if (!contactQ.data) {
     return (
       <div>
-        <header className="page-head"><div className="loading" style={{ width: 280, height: 32 }} /></header>
-        <div className="loading" style={{ height: 200 }} />
+        <header className="page-head"><div className="skel-title" /></header>
+        <div className="skel-card" />
       </div>
     );
   }
@@ -123,10 +130,24 @@ export default function ContactDetail() {
             </div>
           </form>
 
-          <div className="section-head">
+          <div className="section-head" id="calls-section">
             <h2>Calls</h2>
             <span className="meta">{myCalls.length} sessions</span>
           </div>
+
+          {filterObjection && (
+            <div style={{ marginBottom: 12 }}>
+              <button
+                type="button"
+                className="filter-pill"
+                onClick={() => setFilterObjection(null)}
+                title="Clear objection filter"
+              >
+                <span>Filtered: {filterObjection}</span>
+                <span className="x"><CloseIcon size={11} /></span>
+              </button>
+            </div>
+          )}
 
           {myCalls.length === 0 ? (
             <div className="empty glass"><p>No calls with this contact yet.</p></div>
@@ -163,7 +184,7 @@ export default function ContactDetail() {
             </div>
             <div className="body">
               {octaQ.isLoading
-                ? <div className="loading" style={{ height: 12, marginBottom: 8 }} />
+                ? <div className="skel-text" style={{ marginBottom: 8 }} />
                 : octaQ.data?.context
                   ? octaQ.data.context
                   : <span className="empty">
@@ -185,7 +206,16 @@ export default function ContactDetail() {
                   const max = objQ.data![0].count;
                   const pct = (o.count / max) * 100;
                   return (
-                    <div className="obj-row" key={i}>
+                    <button
+                      type="button"
+                      className="obj-row"
+                      key={i}
+                      title="Click to filter calls (coming soon)"
+                      onClick={() => {
+                        setFilterObjection(o.objection);
+                        document.getElementById('calls-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    >
                       <div className="label">
                         <span className="text">{o.objection}</span>
                       </div>
@@ -193,7 +223,7 @@ export default function ContactDetail() {
                         <div className="obj-bar"><div className="fill" style={{ width: `${pct}%` }} /></div>
                         <span className="count">{o.count}</span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -205,6 +235,12 @@ export default function ContactDetail() {
           </article>
         </div>
       </div>
+      {toast && (
+        <div className="toast" role="status">
+          <span className="dot" />
+          <span>Contact saved</span>
+        </div>
+      )}
     </div>
   );
 }

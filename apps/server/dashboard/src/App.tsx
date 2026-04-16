@@ -5,13 +5,14 @@ import ContactDetail from './pages/ContactDetail';
 import CallDetail from './pages/CallDetail';
 import { HomeIcon, ContactsIcon } from './components/icons';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LogoMark } from './components/Logo';
 
 export default function App() {
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <span className="dot" />
+          <LogoMark size={18} />
           <span>Signal</span>
           <span className="small">v0.4</span>
         </div>

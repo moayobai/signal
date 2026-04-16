@@ -11,11 +11,11 @@ import WebSocket from 'ws';
 import type { FaceSignals } from '@signal/types';
 
 const HUME_WS_URL = 'wss://api.hume.ai/v0/stream/models';
-const PLACEHOLDER_PREFIXES = ['your-hume', ''];
+const PLACEHOLDER_PREFIXES = ['your-hume'];
 
 function isPlaceholderKey(key: string): boolean {
   if (!key) return true;
-  return PLACEHOLDER_PREFIXES.some(p => p && key.startsWith(p));
+  return PLACEHOLDER_PREFIXES.some(p => key.startsWith(p));
 }
 
 export interface HumeClientOptions {

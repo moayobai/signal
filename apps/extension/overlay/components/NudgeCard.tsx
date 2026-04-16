@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { SignalFrame } from '@signal/types';
+import { userFacingLabel, type SignalFrame } from '@signal/types';
 
 interface Props {
   frame: SignalFrame;
@@ -32,12 +32,12 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
       className={`sig-nudge ${danger ? 'danger' : ''} ${dimmed ? 'dim' : ''}`}
       role={danger ? 'alert' : 'status'}
       aria-live={danger ? 'assertive' : 'polite'}
-      aria-label={`Signal: ${frame.prompt.type}`}
+      aria-label={`Signal: ${userFacingLabel(frame.prompt.type)}`}
       onMouseEnter={() => setDimmed(false)}
     >
       <div className="head">
         <div className="label">
-          <span className={`badge ${typeClass}`} title={badgeTooltip(frame.prompt.type)}>{frame.prompt.type}</span>
+          <span className={`badge ${typeClass}`} title={badgeTooltip(frame.prompt.type)}>{userFacingLabel(frame.prompt.type)}</span>
           <span className="meta">Signal · {pct}% confidence</span>
         </div>
         {onDismiss && (

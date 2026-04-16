@@ -7,6 +7,21 @@ export type PromptType =
   | 'SILENCE'
   | 'IDLE';
 
+/**
+ * Collapses the 7 internal PromptType values into 2 user-facing categories
+ * (plus Idle). Internal types remain untouched for analytics/coloring —
+ * this only affects what users see in the UI.
+ *
+ *   Say this → ASK, CLOSE, REFRAME   (actionable prompts)
+ *   Careful  → WARN, BODY, SILENCE   (warnings / caution)
+ *   Idle     → IDLE
+ */
+export function userFacingLabel(type: string): 'Say this' | 'Careful' | 'Idle' {
+  if (type === 'IDLE') return 'Idle';
+  if (type === 'WARN' || type === 'BODY' || type === 'SILENCE') return 'Careful';
+  return 'Say this';
+}
+
 export type OverlayState = 'IDLE' | 'LIVE' | 'DANGER' | 'POSTCALL';
 
 export interface SignalPrompt {

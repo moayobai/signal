@@ -1,9 +1,10 @@
 import './overlay.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSignalStore } from './store';
 import { createFixture } from '../mock/fixture';
 import { NudgeCard } from './components/NudgeCard';
 import { LiveSidebar } from './components/LiveSidebar';
+import { playNudgeTone } from './sound';
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -75,6 +76,18 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
     && frame.prompt.type !== 'IDLE'
     && !nudgeDismissed
     && Date.now() >= snoozeUntil;
+
+  // Play the signature tone when a nudge first appears — but never during
+  // DANGER, since that state already pulses + reddens the card. Double-signal
+  // would be too much.
+  const prevShowNudgeRef = useRef(false);
+  useEffect(() => {
+    const visible = Boolean(showNudge);
+    if (visible && !prevShowNudgeRef.current && overlayState !== 'DANGER') {
+      playNudgeTone();
+    }
+    prevShowNudgeRef.current = visible;
+  }, [showNudge, overlayState]);
 
   return (
     <div className="sig-root">
