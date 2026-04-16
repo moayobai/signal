@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { userFacingLabel } from '@signal/types';
-import { api } from '../lib/api';
+import { api, type CallScorecard } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { CheckIcon, WarnIcon, TargetIcon, CopyIcon, SparkIcon, PencilIcon } from '../components/icons';
 
@@ -130,6 +130,8 @@ export default function CallDetail() {
               </ul>
             </article>
           </div>
+
+          {summaryQ.data.scorecard && <ScorecardSection scorecard={summaryQ.data.scorecard} />}
 
           <article className={`followup-card ${editing ? 'editing' : ''}`}>
             <div className="head">
@@ -289,5 +291,125 @@ function TalkRatioCard({
       )}
       <div style={{ fontSize: 11, marginTop: 4, color: hint.color }}>{hint.label}</div>
     </div>
+  );
+}
+
+function scoreColor(score: number): string {
+  if (score >= 8) return '#22c55e';
+  if (score >= 5) return '#f5a524';
+  return '#ef4444';
+}
+
+function ScorecardSection({ scorecard }: { scorecard: CallScorecard }) {
+  return (
+    <article
+      className="scorecard-card"
+      style={{
+        marginBottom: 28,
+        padding: '20px 22px',
+        borderRadius: 14,
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+        <span
+          className="tag"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 999,
+            fontSize: 11,
+            letterSpacing: 0.8,
+            fontWeight: 600,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          {scorecard.framework}
+        </span>
+        <h3 style={{ margin: 0, fontSize: 14, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+          Scorecard
+        </h3>
+        <div
+          style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--font-serif, Fraunces, Georgia, serif)',
+            fontStyle: 'italic',
+            fontSize: 44,
+            lineHeight: 1,
+            color: scoreColor(scorecard.overallScore / 10),
+          }}
+        >
+          {scorecard.overallScore}
+          <span style={{ fontSize: 18, color: 'var(--ink-3)' }}>/100</span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
+        {scorecard.dimensions.map(d => (
+          <div
+            key={d.key}
+            style={{
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{d.label}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: scoreColor(d.score) }}>
+                {d.score.toFixed(1)}/10
+              </span>
+            </div>
+            <div
+              style={{
+                height: 4,
+                borderRadius: 2,
+                background: 'rgba(255,255,255,0.06)',
+                overflow: 'hidden',
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(100, d.score * 10)}%`,
+                  height: '100%',
+                  background: scoreColor(d.score),
+                }}
+              />
+            </div>
+            <div className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
+              {d.justification}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {scorecard.nextSteps.length > 0 && (
+        <div>
+          <div
+            className="muted"
+            style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 }}
+          >
+            Next steps
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {scorecard.nextSteps.map((s, i) => (
+              <li key={i} style={{ fontSize: 13, lineHeight: 1.5 }}>
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
   );
 }

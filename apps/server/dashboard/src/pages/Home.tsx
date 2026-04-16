@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { api, type Contact, type CallSession } from '../lib/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, type Contact, type CallSession, type UpcomingMeeting } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, TrendingIcon, SparkIcon, TargetIcon } from '../components/icons';
 
@@ -72,6 +72,11 @@ export default function Home() {
   const calls = useQuery({ queryKey: ['calls'], queryFn: api.calls });
   const contacts = useQuery({ queryKey: ['contacts'], queryFn: api.contacts });
   const trend = useQuery({ queryKey: ['sentiment-trend'], queryFn: api.sentimentTrend });
+  const nextMeeting = useQuery({
+    queryKey: ['next-meeting'],
+    queryFn: api.nextMeeting,
+    refetchInterval: 60_000,
+  });
   const trendPoints = (trend.data ?? []).slice(-6);
 
   const total = calls.data?.length ?? 0;
@@ -111,6 +116,8 @@ export default function Home() {
           </p>
         </div>
       </header>
+
+      <NextMeetingCard meeting={nextMeeting.data ?? null} contacts={contacts.data ?? []} />
 
       <div className="stat-grid">
         <article className="stat stat-with-ring">
@@ -182,6 +189,67 @@ export default function Home() {
         </ul>
       )}
     </div>
+  );
+}
+
+function minutesFromNow(ts: number): number {
+  return Math.max(0, Math.round((ts - Date.now()) / 60000));
+}
+
+function NextMeetingCard({ meeting, contacts }: { meeting: UpcomingMeeting | null; contacts: Contact[] }) {
+  const navigate = useNavigate();
+  if (!meeting) {
+    return (
+      <article className="glass" style={{ padding: 16, marginBottom: 20, opacity: 0.7 }}>
+        <div className="label" style={{ marginBottom: 4 }}>Next meeting</div>
+        <div style={{ color: 'var(--muted, #8a8a8a)' }}>No meetings in the next hour.</div>
+      </article>
+    );
+  }
+
+  const mins = minutesFromNow(meeting.startTime);
+  const primary = meeting.attendees.find(a => !a.isOrganizer) ?? meeting.attendees[0];
+  const shown = meeting.attendees.slice(0, 3);
+  const matched = primary?.email
+    ? contacts.find(c => c.email?.toLowerCase() === primary.email.toLowerCase())
+    : undefined;
+
+  return (
+    <article className="glass" style={{ padding: 16, marginBottom: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+        <div className="label" style={{ marginBottom: 4 }}>
+          Next meeting · {meeting.provider === 'google' ? 'Google' : 'Outlook'}
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {meeting.title}
+        </div>
+        <div style={{ marginTop: 4, color: 'var(--muted, #8a8a8a)', fontSize: 13 }}>
+          Starts in <strong>{mins}</strong> min · {shown.map(a => a.name ?? a.email).join(', ')}
+          {meeting.attendees.length > shown.length ? ` +${meeting.attendees.length - shown.length}` : ''}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {meeting.meetingLink && (
+          <a
+            href={meeting.meetingLink}
+            target="_blank"
+            rel="noreferrer"
+            className="pill active"
+            style={{ textDecoration: 'none' }}
+          >
+            Join
+          </a>
+        )}
+        <button
+          className="pill"
+          disabled={!matched}
+          onClick={() => matched && navigate(`/contacts/${matched.id}`)}
+          title={matched ? `Open ${matched.name}` : 'No matching contact'}
+        >
+          Prepare
+        </button>
+      </div>
+    </article>
   );
 }
 

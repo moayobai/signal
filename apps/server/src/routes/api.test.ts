@@ -6,7 +6,7 @@ import { initDb } from '../services/db.js';
 async function buildApp() {
   const app = Fastify({ logger: false });
   const db = initDb(':memory:');
-  registerApiRoutes(app, { db, octamemApiKey: '' });
+  registerApiRoutes(app, { db, octamemApiKey: '', voyageApiKey: '' });
   await app.ready();
   return { app, db };
 }

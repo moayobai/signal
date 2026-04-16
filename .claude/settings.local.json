@@ -71,7 +71,10 @@
       "Bash(~/.local/bin/pnpm --filter extension typecheck)",
       "Bash(~/.local/bin/pnpm --filter dashboard typecheck)",
       "Bash(npx tsc *)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(pnpm run *)",
+      "Bash(chmod +x \"/Users/mahomedayob/SIGNAL BUILD/scripts/google-oauth.mjs\")",
+      "Bash(pnpm exec *)"
     ]
   }
 }

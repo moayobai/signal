@@ -3,7 +3,8 @@ import Home from './pages/Home';
 import Contacts from './pages/Contacts';
 import ContactDetail from './pages/ContactDetail';
 import CallDetail from './pages/CallDetail';
-import { HomeIcon, ContactsIcon } from './components/icons';
+import Search from './pages/Search';
+import { HomeIcon, ContactsIcon, SearchIcon } from './components/icons';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LogoMark } from './components/Logo';
 
@@ -26,6 +27,10 @@ export default function App() {
             <span className="icon"><ContactsIcon /></span>
             <span>Contacts</span>
           </NavLink>
+          <NavLink to="/search">
+            <span className="icon"><SearchIcon /></span>
+            <span>Search</span>
+          </NavLink>
         </nav>
 
         <div className="sidebar-foot">
@@ -47,6 +52,7 @@ export default function App() {
             <Route path="/contacts" element={<Contacts />} />
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/calls/:id" element={<CallDetail />} />
+            <Route path="/search" element={<Search />} />
           </Routes>
         </ErrorBoundary>
       </main>

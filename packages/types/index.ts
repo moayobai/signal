@@ -82,6 +82,27 @@ export interface PostCallSummary {
   followUpDraft: string;
 }
 
+export type CallFramework = 'MEDDIC' | 'SPICED' | 'BANT';
+
+/**
+ * Per-framework-dimension score (0–10) with Claude's justification.
+ * Keys differ by framework:
+ *  - MEDDIC: metrics, economicBuyer, decisionCriteria, decisionProcess, identifyPain, champion
+ *  - SPICED: situation, pain, impact, criticalEvent, decision
+ *  - BANT:   budget, authority, need, timeline
+ */
+export interface CallScorecard {
+  framework: CallFramework;
+  overallScore: number;      // 0–100, weighted average of dimensions
+  dimensions: Array<{
+    key: string;
+    label: string;
+    score: number;           // 0–10
+    justification: string;   // 1–2 sentences
+  }>;
+  nextSteps: string[];       // 2–4 concrete next actions
+}
+
 export type CallType = 'investor' | 'enterprise' | 'bd' | 'customer';
 
 export interface Prospect {
@@ -111,4 +132,5 @@ export type ServerMessage =
   | { type: 'frame'; frame: SignalFrame }
   | { type: 'state'; overlayState: OverlayState }
   | { type: 'summary'; summary: PostCallSummary }
+  | { type: 'scorecard'; scorecard: CallScorecard }
   | { type: 'error'; message: string };

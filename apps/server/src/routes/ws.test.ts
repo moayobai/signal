@@ -27,8 +27,12 @@ async function buildApp() {
     deepgramApiKey: 'your-deepgram-key-here',
     humeApiKey: 'your-hume-key-here',
     octamemApiKey: 'your-octamem-key-here',
+    voyageApiKey: 'your-voyage-key-here',
+    slackWebhookUrl: 'your-slack-webhook-url-here',
+    hubspotApiKey: 'your-hubspot-key-here',
     liveModel: 'claude-haiku-4-5-20251001',
     summaryModel: 'claude-sonnet-4-6',
+    scoringFramework: 'MEDDIC',
   });
   await app.ready();
   return app;

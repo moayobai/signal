@@ -1,3 +1,6 @@
+import type { CallFramework, CallScorecard } from '@signal/types';
+export type { CallFramework, CallScorecard } from '@signal/types';
+
 const BASE = '/api';
 
 export interface Contact {
@@ -48,6 +51,24 @@ function friendlyMessage(status: number, path: string): string {
 export interface CallSummaryRow {
   winSignals: string[]; objections: string[]; decisions: string[];
   followUpDraft: string; createdAt: number;
+  scorecard: CallScorecard | null;
+}
+
+export interface CalendarAttendee {
+  email: string;
+  name?: string;
+  isOrganizer?: boolean;
+}
+export interface UpcomingMeeting {
+  id: string;
+  provider: 'google' | 'outlook';
+  title: string;
+  startTime: number;
+  endTime: number;
+  attendees: CalendarAttendee[];
+  meetingLink?: string | null;
+  description?: string | null;
+  detectedAt: number;
 }
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
@@ -78,4 +99,15 @@ export const api = {
   sentimentTrend: () => j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
   promptTypes:    () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
   objections:     () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
+  nextMeeting:     () => j<UpcomingMeeting | null>('/calendar/next'),
+  upcomingMeetings: () => j<UpcomingMeeting[]>('/calendar/upcoming'),
+  searchTranscripts: (q: string, limit = 10) =>
+    j<Array<{
+      sessionId: string; chunkIndex: number; speaker: string; text: string;
+      similarity: number; contactId: string | null; contactName: string | null;
+      contactCompany?: string | null; calledAt: number | null;
+    }>>(
+      '/search/transcripts',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, limit }) }
+    ),
 };

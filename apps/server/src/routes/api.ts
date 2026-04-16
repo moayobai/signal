@@ -1,16 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
-  contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB,
+  contacts, callSessions, transcriptLines, signalFrames, callSummaries,
+  transcriptEmbeddings, upcomingMeetings, type DB,
 } from '../services/db.js';
+import type { CalendarAttendee } from '../services/calendar.js';
 import { queryProspectContext } from '../services/octamem.js';
+import { embed, cosineSimilarity, unpackFloat32, isPlaceholderVoyageKey } from '../services/embeddings.js';
 
-export interface ApiRouteOptions { db: DB; octamemApiKey: string; }
+export interface ApiRouteOptions { db: DB; octamemApiKey: string; voyageApiKey: string; }
 
 function safeParseArray(json: string): string[] {
   try { return JSON.parse(json) as string[]; } catch { return []; }
+}
+
+function safeParseJson<T>(json: string | null): T | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as T; } catch { return null; }
 }
 
 // ── Request body schemas ─────────────────────────────────────────────
@@ -29,9 +37,13 @@ const OctaMemQuerySchema = z.object({
     company: z.string().max(200).optional(),
   }),
 });
+const SearchTranscriptsSchema = z.object({
+  query: z.string().min(1).max(200),
+  limit: z.number().int().min(1).max(50).optional(),
+});
 
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
-  const { db, octamemApiKey } = opts;
+  const { db, octamemApiKey, voyageApiKey } = opts;
 
   // ── Contacts ───────────────────────────────────────────────────────
 
@@ -123,6 +135,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
       winSignals: safeParseArray(row.winSignals),
       objections: safeParseArray(row.objections),
       decisions: safeParseArray(row.decisions),
+      scorecard: safeParseJson(row.scorecard),
     };
   });
 
@@ -165,6 +178,103 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     }
     return [...counts.entries()].map(([objection, count]) => ({ objection, count }))
       .sort((a, b) => b.count - a.count);
+  });
+
+  // ── Semantic transcript search ─────────────────────────────────────
+
+  app.post('/api/search/transcripts', async (req, reply) => {
+    if (isPlaceholderVoyageKey(voyageApiKey)) {
+      return reply.code(503).send({ error: 'Semantic search requires VOYAGE_API_KEY' });
+    }
+    const parsed = SearchTranscriptsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid body', details: parsed.error.issues });
+    }
+    const { query } = parsed.data;
+    const limit = parsed.data.limit ?? 10;
+
+    const embedded = await embed([query], voyageApiKey);
+    if (!embedded || embedded.length === 0) {
+      return reply.code(502).send({ error: 'Failed to embed query' });
+    }
+    const qVec = embedded[0];
+
+    // Load all chunk embeddings — fine for <10k calls; swap for sqlite-vss later.
+    const rows = db.select().from(transcriptEmbeddings).all();
+    const scored = rows.map(r => ({
+      sessionId: r.sessionId,
+      chunkIndex: r.chunkIndex,
+      speaker: r.speaker,
+      text: r.text,
+      similarity: cosineSimilarity(qVec, unpackFloat32(r.embedding as Buffer)),
+    }));
+    scored.sort((a, b) => b.similarity - a.similarity);
+    const top = scored.slice(0, limit);
+
+    // Enrich with contact + call metadata.
+    const sessionIds = [...new Set(top.map(t => t.sessionId))];
+    const sessions = sessionIds.length > 0
+      ? db.select().from(callSessions).where(inArray(callSessions.id, sessionIds)).all()
+      : [];
+    const sessionById = new Map(sessions.map(s => [s.id, s]));
+    const contactIds = [...new Set(sessions.map(s => s.contactId).filter((x): x is string => !!x))];
+    const contactRows = contactIds.length > 0
+      ? db.select().from(contacts).where(inArray(contacts.id, contactIds)).all()
+      : [];
+    const contactById = new Map(contactRows.map(c => [c.id, c]));
+
+    return top.map(t => {
+      const session = sessionById.get(t.sessionId);
+      const contact = session?.contactId ? contactById.get(session.contactId) : undefined;
+      return {
+        sessionId: t.sessionId,
+        chunkIndex: t.chunkIndex,
+        speaker: t.speaker,
+        text: t.text,
+        similarity: t.similarity,
+        contactId: contact?.id ?? null,
+        contactName: contact?.name ?? null,
+        contactCompany: contact?.company ?? null,
+        calledAt: session?.startedAt ?? null,
+      };
+    });
+  });
+
+  // ── Calendar / upcoming meetings ───────────────────────────────────
+
+  function hydrateMeeting(row: typeof upcomingMeetings.$inferSelect) {
+    return {
+      id: row.id,
+      provider: row.provider,
+      title: row.title,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      attendees: safeParseJson<CalendarAttendee[]>(row.attendees) ?? [],
+      meetingLink: row.meetingLink,
+      description: row.description,
+      detectedAt: row.detectedAt,
+    };
+  }
+
+  app.get('/api/calendar/next', async () => {
+    const now = Date.now();
+    const HORIZON_MS = 15 * 60 * 1000; // match poller window
+    const row = db.select().from(upcomingMeetings)
+      .where(sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`)
+      .orderBy(asc(upcomingMeetings.startTime))
+      .limit(1)
+      .get();
+    return row ? hydrateMeeting(row) : null;
+  });
+
+  app.get('/api/calendar/upcoming', async () => {
+    const now = Date.now();
+    const HORIZON_MS = 60 * 60 * 1000; // next 1 hour
+    const rows = db.select().from(upcomingMeetings)
+      .where(sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`)
+      .orderBy(asc(upcomingMeetings.startTime))
+      .all();
+    return rows.map(hydrateMeeting);
   });
 
   // ── Contact-scoped aggregates ──────────────────────────────────────

@@ -7,10 +7,14 @@ import { createHumeClient, type HumeHandle } from '../services/hume.js';
 import { runLiveNudge } from '../services/claude.js';
 import { buildSystemPrompt, buildUserPrompt } from '../prompts/live.js';
 import { generateSummary } from '../services/summary.js';
+import { generateScorecard } from '../services/scorecard.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
-import { contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB } from '../services/db.js';
+import { postCallSummaryToSlack } from '../services/slack.js';
+import { findOrCreateContact, writeCallEngagement } from '../services/hubspot.js';
+import { contacts, callSessions, transcriptLines, signalFrames, callSummaries, transcriptEmbeddings, type DB } from '../services/db.js';
+import { embed, packFloat32, chunkTranscript, isPlaceholderVoyageKey } from '../services/embeddings.js';
 import type { AIProvider } from '../services/ai.js';
-import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine, CallType, FaceSignals } from '@signal/types';
+import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine, CallType, CallFramework, FaceSignals } from '@signal/types';
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
@@ -26,8 +30,13 @@ export interface WsRouteOptions {
   deepgramModel?: string;
   humeApiKey: string;
   octamemApiKey: string;
+  voyageApiKey: string;
+  slackWebhookUrl: string;
+  hubspotApiKey: string;
   liveModel: string;
   summaryModel: string;
+  scoringFramework: CallFramework;
+  publicBaseUrl?: string;
 }
 
 export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): void {
@@ -199,9 +208,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         });
 
         if (summary) {
+          const summaryRowId = randomUUID();
           try {
             opts.db.insert(callSummaries).values({
-              id: randomUUID(),
+              id: summaryRowId,
               sessionId,
               winSignals: JSON.stringify(summary.winSignals),
               objections: JSON.stringify(summary.objections),
@@ -211,6 +221,28 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
             }).run();
           } catch (err) {
             console.error('[SIGNAL] failed to persist summary:', err);
+          }
+
+          // Parallel scorecard generation — grades the call against a sales
+          // methodology (MEDDIC / SPICED / BANT). Non-fatal if it fails.
+          const scorecard = await generateScorecard({
+            ai: opts.ai,
+            model: opts.summaryModel,
+            framework: opts.scoringFramework,
+            callType,
+            transcript: collectedTranscript,
+          }).catch(err => { console.error('[SIGNAL] generateScorecard failed:', err); return null; });
+
+          if (scorecard) {
+            try {
+              opts.db.update(callSummaries)
+                .set({ scorecard: JSON.stringify(scorecard) })
+                .where(eq(callSummaries.sessionId, sessionId))
+                .run();
+            } catch (err) {
+              console.error('[SIGNAL] failed to persist scorecard:', err);
+            }
+            send({ type: 'scorecard', scorecard });
           }
 
           try {
@@ -229,8 +261,81 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
             console.error('[SIGNAL] failed to store call memory:', err);
           }
 
+          // HubSpot — ensure contact exists then log the call. Graceful no-op on placeholder / errors.
+          try {
+            const existing = opts.db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+            let hubspotContactId = existing?.hubspotId ?? null;
+            if (!hubspotContactId) {
+              const created = await findOrCreateContact({
+                apiKey: opts.hubspotApiKey,
+                prospect: { name: prospect.name, email: prospect.email, company: prospect.company },
+              });
+              if (created) {
+                hubspotContactId = created.hubspotId;
+                try {
+                  opts.db.update(contacts).set({ hubspotId: hubspotContactId, updatedAt: endedAt })
+                    .where(eq(contacts.id, contactId)).run();
+                } catch (err) {
+                  console.error('[SIGNAL] failed to persist hubspot id:', err);
+                }
+              }
+            }
+            if (hubspotContactId) {
+              await writeCallEngagement({
+                apiKey: opts.hubspotApiKey,
+                hubspotContactId,
+                summary,
+                durationMs,
+                sentimentAvg,
+                startedAt,
+              });
+            }
+          } catch (err) {
+            console.error('[SIGNAL] HubSpot sync failed:', err);
+          }
+
+          // Slack — post summary to the configured webhook. Graceful no-op on placeholder.
+          try {
+            const callUrl = opts.publicBaseUrl
+              ? `${opts.publicBaseUrl.replace(/\/$/, '')}/dashboard/#/calls/${sessionId}`
+              : undefined;
+            await postCallSummaryToSlack({
+              webhookUrl: opts.slackWebhookUrl,
+              contact: { name: prospect.name, company: prospect.company },
+              summary,
+              callUrl,
+              durationMs,
+              sentimentAvg,
+            });
+          } catch (err) {
+            console.error('[SIGNAL] Slack post failed:', err);
+          }
+
           send({ type: 'summary', summary });
           send({ type: 'state', overlayState: 'POSTCALL' });
+        }
+
+        // Index transcript for semantic search. Best-effort — never blocks end-of-call.
+        if (!isPlaceholderVoyageKey(opts.voyageApiKey)) {
+          try {
+            const chunks = chunkTranscript(collectedTranscript);
+            if (chunks.length > 0) {
+              const vectors = await embed(chunks.map(c => c.text), opts.voyageApiKey);
+              if (vectors && vectors.length === chunks.length) {
+                for (let i = 0; i < chunks.length; i++) {
+                  opts.db.insert(transcriptEmbeddings).values({
+                    sessionId,
+                    chunkIndex: chunks[i].index,
+                    speaker: chunks[i].speaker,
+                    text: chunks[i].text,
+                    embedding: packFloat32(vectors[i]),
+                  }).run();
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[SIGNAL] transcript embedding indexing failed:', err);
+          }
         }
       }
       callState = 'STOPPED';

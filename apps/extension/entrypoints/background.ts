@@ -49,8 +49,32 @@ export default defineBackground(() => {
       queryOctaMem(msg.prospect as Prospect).then(context => sendResponse({ context })).catch(() => sendResponse({ context: null }));
       return true;
     }
+
+    if (msg.type === 'NEXT_MEETING') {
+      fetchNextMeeting().then(meeting => sendResponse({ meeting })).catch(() => sendResponse({ meeting: null }));
+      return true;
+    }
   });
 });
+
+interface NextMeetingResponse {
+  id: string;
+  provider: 'google' | 'outlook';
+  title: string;
+  startTime: number;
+  endTime: number;
+  attendees: Array<{ email: string; name?: string; isOrganizer?: boolean }>;
+  meetingLink?: string | null;
+}
+
+async function fetchNextMeeting(): Promise<NextMeetingResponse | null> {
+  try {
+    const base = __WS_URL__.replace(/^ws/, 'http');
+    const res = await fetch(`${base}/api/calendar/next`);
+    if (!res.ok) return null;
+    return await res.json() as NextMeetingResponse | null;
+  } catch { return null; }
+}
 
 async function queryOctaMem(prospect: Prospect): Promise<string | null> {
   if (!prospect?.name) return null;
