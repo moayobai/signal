@@ -7,8 +7,8 @@ COPY packages/types ./packages/types
 COPY apps/server ./apps/server
 COPY knowledge ./knowledge
 
-# Install pnpm
-RUN npm install -g pnpm@latest
+# Install the same pnpm major used by CI and packageManager metadata
+RUN npm install -g pnpm@9.15.9
 
 # Install server deps
 RUN pnpm install --filter server --frozen-lockfile

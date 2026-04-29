@@ -85,6 +85,10 @@ export const callSummaries = sqliteTable('call_summaries', {
 export type DB = BetterSQLite3Database<Record<string, never>>;
 
 const DDL = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  applied_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, linkedin_url TEXT,
   company TEXT, role TEXT, notes TEXT, octamem_id TEXT, hubspot_id TEXT,
@@ -101,18 +105,22 @@ CREATE TABLE IF NOT EXISTS call_sessions (
 );
 CREATE TABLE IF NOT EXISTS transcript_lines (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
-  speaker TEXT NOT NULL, text TEXT NOT NULL, timestamp INTEGER NOT NULL
+  speaker TEXT NOT NULL, text TEXT NOT NULL, timestamp INTEGER NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES call_sessions(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS signal_frames (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
   prompt_type TEXT NOT NULL, prompt_text TEXT NOT NULL, confidence REAL NOT NULL,
-  sentiment INTEGER NOT NULL, danger_flag INTEGER NOT NULL, created_at INTEGER NOT NULL
+  sentiment INTEGER NOT NULL, danger_flag INTEGER NOT NULL, created_at INTEGER NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES call_sessions(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS call_summaries (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL UNIQUE,
   win_signals TEXT NOT NULL, objections TEXT NOT NULL, decisions TEXT NOT NULL,
-  follow_up_draft TEXT NOT NULL, scorecard TEXT, created_at INTEGER NOT NULL
+  follow_up_draft TEXT NOT NULL, scorecard TEXT, created_at INTEGER NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES call_sessions(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_contacts_name_company ON contacts(name, company);
 CREATE INDEX IF NOT EXISTS idx_call_sessions_contact ON call_sessions(contact_id);
 CREATE INDEX IF NOT EXISTS idx_call_sessions_started ON call_sessions(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_call_sessions_contact_started ON call_sessions(contact_id, started_at DESC);
@@ -125,9 +133,11 @@ CREATE TABLE IF NOT EXISTS transcript_embeddings (
   chunk_index INTEGER NOT NULL,
   speaker TEXT NOT NULL,
   text TEXT NOT NULL,
-  embedding BLOB NOT NULL
+  embedding BLOB NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES call_sessions(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_embeddings_session ON transcript_embeddings(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_session_chunk ON transcript_embeddings(session_id, chunk_index);
 CREATE TABLE IF NOT EXISTS upcoming_meetings (
   id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
@@ -142,22 +152,49 @@ CREATE TABLE IF NOT EXISTS upcoming_meetings (
 CREATE INDEX IF NOT EXISTS idx_upcoming_meetings_start ON upcoming_meetings(start_time);
 `;
 
+const MIGRATIONS: Array<{ id: string; statements: string[] }> = [
+  {
+    id: '20260415_call_metrics_and_integrations',
+    statements: [
+      'ALTER TABLE call_sessions ADD COLUMN user_words INTEGER',
+      'ALTER TABLE call_sessions ADD COLUMN prospect_words INTEGER',
+      'ALTER TABLE call_sessions ADD COLUMN talk_ratio REAL',
+      'ALTER TABLE call_sessions ADD COLUMN longest_monologue_ms INTEGER',
+      'ALTER TABLE call_summaries ADD COLUMN scorecard TEXT',
+      'ALTER TABLE contacts ADD COLUMN hubspot_id TEXT',
+    ],
+  },
+];
+
+function isBenignMigrationError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /duplicate column name|already exists/i.test(msg);
+}
+
+function applyMigrations(sqlite: Database.Database): void {
+  const hasMigration = sqlite.prepare('SELECT 1 FROM schema_migrations WHERE id = ?').pluck();
+  const recordMigration = sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES (?, ?)');
+
+  for (const migration of MIGRATIONS) {
+    if (hasMigration.get(migration.id)) continue;
+    for (const stmt of migration.statements) {
+      try {
+        sqlite.exec(stmt);
+      } catch (err) {
+        if (!isBenignMigrationError(err)) throw err;
+      }
+    }
+    recordMigration.run(migration.id, Date.now());
+  }
+}
+
 export function initDb(url: string): DB {
   const sqlite = new Database(url);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
+  sqlite.pragma('busy_timeout = 5000');
+  sqlite.pragma('synchronous = NORMAL');
   sqlite.exec(DDL);
-  // Backfill columns on existing DBs — SQLite throws if the column exists, ignore.
-  const additions = [
-    'ALTER TABLE call_sessions ADD COLUMN user_words INTEGER',
-    'ALTER TABLE call_sessions ADD COLUMN prospect_words INTEGER',
-    'ALTER TABLE call_sessions ADD COLUMN talk_ratio REAL',
-    'ALTER TABLE call_sessions ADD COLUMN longest_monologue_ms INTEGER',
-    'ALTER TABLE call_summaries ADD COLUMN scorecard TEXT',
-    'ALTER TABLE contacts ADD COLUMN hubspot_id TEXT',
-  ];
-  for (const stmt of additions) {
-    try { sqlite.exec(stmt); } catch { /* column already exists */ }
-  }
+  applyMigrations(sqlite);
   return drizzle(sqlite);
 }

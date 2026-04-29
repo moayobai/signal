@@ -10,6 +10,7 @@ import { initDb } from './services/db.js';
 import { createAIProvider } from './services/ai.js';
 import { createCalendarProvider } from './services/calendar.js';
 import { startCalendarPoller } from './services/calendar-poller.js';
+import { registerSecurity } from './services/security.js';
 import type { CallFramework } from '@signal/types';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -35,6 +36,10 @@ const OUTLOOK_CLIENT_ID = process.env.OUTLOOK_CLIENT_ID ?? '';
 const OUTLOOK_CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET ?? '';
 const OUTLOOK_REFRESH_TOKEN = process.env.OUTLOOK_REFRESH_TOKEN ?? '';
 const OUTLOOK_TENANT_ID = process.env.OUTLOOK_TENANT_ID ?? 'common';
+const SIGNAL_AUTH_TOKEN = process.env.SIGNAL_AUTH_TOKEN ?? '';
+const SIGNAL_AUTH_DISABLED = process.env.SIGNAL_AUTH_DISABLED === 'true';
+const SIGNAL_RATE_LIMIT_MAX = Number(process.env.SIGNAL_RATE_LIMIT_MAX ?? 120);
+const SIGNAL_RATE_LIMIT_WINDOW = process.env.SIGNAL_RATE_LIMIT_WINDOW ?? '1 minute';
 
 const app = Fastify({
   logger: { transport: { target: 'pino-pretty', options: { colorize: true } } },
@@ -47,6 +52,12 @@ const ai = createAIProvider({
   openrouterApiKey: OPENROUTER_API_KEY,
 });
 
+await registerSecurity(app, {
+  authToken: SIGNAL_AUTH_TOKEN,
+  authDisabled: SIGNAL_AUTH_DISABLED,
+  rateLimitMax: SIGNAL_RATE_LIMIT_MAX,
+  rateLimitWindow: SIGNAL_RATE_LIMIT_WINDOW,
+});
 await app.register(websocketPlugin);
 
 // Dashboard static files — built by `pnpm --filter server run build:dashboard` → apps/server/public
@@ -137,6 +148,7 @@ try {
   if (VOYAGE_API_KEY.startsWith('your-voyage')) app.log.warn('[SIGNAL] VOYAGE_API_KEY is placeholder — semantic transcript search disabled');
   if (SLACK_WEBHOOK_URL.startsWith('your-slack')) app.log.warn('[SIGNAL] SLACK_WEBHOOK_URL is placeholder — Slack posting disabled');
   if (HUBSPOT_API_KEY.startsWith('your-hubspot')) app.log.warn('[SIGNAL] HUBSPOT_API_KEY is placeholder — HubSpot sync disabled');
+  if (!SIGNAL_AUTH_DISABLED) app.log.info('[SIGNAL] HTTP auth enabled');
   if (!calendarProvider) {
     app.log.warn('[SIGNAL] No calendar provider configured — pre-call meeting detection disabled');
   } else {

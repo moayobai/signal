@@ -1,8 +1,8 @@
 # SIGNAL
 
-Real-time AI sales coach running live in your browser calls. SIGNAL listens to your calls, reads body language signals, and surfaces nudges, danger warnings, and closing prompts — all inside a floating glass HUD.
+Real-time AI sales coach running live in your browser calls. SIGNAL listens to your calls, infers speech and optional face-emotion signals, and surfaces nudges, danger warnings, and closing prompts — all inside a floating glass HUD.
 
-**Self-hosted. Single-user. No data leaves your machine (except to your AI provider).**
+**Self-hosted and single-user by default. Call data is stored in your SQLite database. Data leaves your machine only for providers you configure: Deepgram for STT, Claude/OpenRouter for AI, and optional Hume, Voyage, OctaMem, Slack, HubSpot, Google, Outlook, or Gmail integrations.**
 
 ---
 
@@ -11,8 +11,8 @@ Real-time AI sales coach running live in your browser calls. SIGNAL listens to y
 | Feature | Details |
 |---|---|
 | **Live nudges** | Claude Haiku analyses transcript every ~12s and fires `ASK`, `REFRAME`, `WARN`, `CLOSE`, or `SILENCE` cues |
-| **Danger detection** | Sentiment drop + posture shift → DANGER state with red pulse |
-| **On-call HUD** | Top-centre nudge card + right-edge sidebar (sentiment ring, body language, cue history, transcript tail) |
+| **Danger detection** | Sentiment drop, objection keywords, and silence → DANGER state with red pulse |
+| **On-call HUD** | Top-centre nudge card + right-edge sidebar (sentiment ring, speech signals, optional face emotions, cue history, transcript tail) |
 | **Post-call summary** | Claude Sonnet generates win signals, objections, decisions, and a follow-up email draft |
 | **OctaMem memory** | Pre-call context from past interactions; post-call memories pushed back |
 | **CRM dashboard** | Web UI at `/dashboard/` — contacts, call history, analytics, objection tracking |
@@ -50,7 +50,7 @@ packages/types    — shared TypeScript types (Prospect, SignalFrame, ServerMess
 ### 1. Install
 
 ```bash
-git clone https://github.com/Alnoorcapital/signal.git
+git clone https://github.com/moayobai/signal.git
 cd signal
 pnpm install
 ```
@@ -59,7 +59,8 @@ pnpm install
 
 ```bash
 cp .env.example apps/server/.env
-# Edit apps/server/.env — fill in ANTHROPIC_API_KEY and DEEPGRAM_API_KEY at minimum
+# Edit apps/server/.env — set SIGNAL_AUTH_TOKEN, then fill in provider keys.
+# Generate a token with: openssl rand -base64 32
 ```
 
 ### 3. Run the server
@@ -67,8 +68,8 @@ cp .env.example apps/server/.env
 ```bash
 pnpm dev:server
 # Server → http://localhost:8080
-# Dashboard → http://localhost:8080/dashboard/
-# WebSocket → ws://localhost:8080/ws
+# Dashboard → http://localhost:8080/dashboard/?token=$SIGNAL_AUTH_TOKEN
+# WebSocket → ws://localhost:8080/ws?token=$SIGNAL_AUTH_TOKEN
 ```
 
 ### 4. Load the extension
@@ -96,13 +97,14 @@ fly volumes create signal_data --region lhr --size 1
 # Deploy
 fly deploy
 fly secrets set \
+  SIGNAL_AUTH_TOKEN="$(openssl rand -base64 32)" \
   ANTHROPIC_API_KEY=sk-ant-... \
   DEEPGRAM_API_KEY=... \
   OCTAMEM_API_KEY=... \
   DATABASE_URL=/data/signal.db
 ```
 
-Point the extension at your deployed server: set `WS_URL=wss://signal-server.fly.dev` in `apps/extension/.env` before building.
+Point the extension at your deployed server: set `WS_URL=wss://signal-server.fly.dev` and the same `SIGNAL_AUTH_TOKEN` in `apps/extension/.env` before building.
 
 ## Development
 
@@ -113,7 +115,7 @@ pnpm format      # Prettier
 pnpm test        # Vitest
 
 # End-to-end smoke test (no real API keys needed)
-node scripts/e2e-smoke.ts
+pnpm e2e:smoke
 
 # Overlay dev harness (no extension needed)
 pnpm dev:ext     # then open http://localhost:3000/harness.html
@@ -131,6 +133,10 @@ See [`.env.example`](.env.example) for the full list.
 | `AI_PROVIDER` | No | `claude` | `claude` or `openrouter` |
 | `DATABASE_URL` | No | `./signal.db` | SQLite file path |
 | `PORT` | No | `8080` | Server port |
+| `SIGNAL_AUTH_TOKEN` | Yes | — | Bearer token required for dashboard, API, and WebSocket access |
+| `SIGNAL_AUTH_DISABLED` | No | `false` | Set to `true` only for local tests/dev without auth |
+| `SIGNAL_RATE_LIMIT_MAX` | No | `120` | Max requests per rate-limit window |
+| `SIGNAL_RATE_LIMIT_WINDOW` | No | `1 minute` | Rate-limit window |
 
 \* Or `OPENROUTER_API_KEY` if `AI_PROVIDER=openrouter`
 

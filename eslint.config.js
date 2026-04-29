@@ -4,6 +4,14 @@ import tsParser from '@typescript-eslint/parser';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
+const nodeGlobals = {
+  Buffer: 'readonly',
+  console: 'readonly',
+  process: 'readonly',
+  URL: 'readonly',
+  URLSearchParams: 'readonly',
+};
+
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
   {
@@ -16,6 +24,14 @@ export default [
     ],
   },
   js.configs.recommended,
+  {
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: nodeGlobals,
+    },
+  },
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -33,6 +49,9 @@ export default [
     },
     rules: {
       // TypeScript
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'no-empty': ['error', { allowEmptyCatch: true }],
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-non-null-assertion': 'warn',

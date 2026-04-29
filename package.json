@@ -1,6 +1,7 @@
 {
   "name": "signal",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "turbo run dev --filter=extension",
     "dev:ext": "turbo run dev:ext --filter=extension",
@@ -10,19 +11,25 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "e2e:smoke": "tsx scripts/e2e-smoke.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/ws": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "better-sqlite3": "^12.9.0",
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "prettier": "^3.3.0",
-    "turbo": "^2.0.0"
+    "tsx": "^4.15.0",
+    "turbo": "^2.0.0",
+    "ws": "^8.17.0"
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "packageManager": "pnpm@9.15.9"
 }

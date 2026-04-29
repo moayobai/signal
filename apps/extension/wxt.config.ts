@@ -23,6 +23,7 @@ export default defineConfig({
     plugins: [tailwindcss()],
     define: {
       __WS_URL__: JSON.stringify(process.env.WS_URL ?? 'ws://localhost:8080'),
+      __SIGNAL_AUTH_TOKEN__: JSON.stringify(process.env.SIGNAL_AUTH_TOKEN ?? ''),
     },
     resolve: {
       alias: { '@signal/types': '../../packages/types/index.ts' },

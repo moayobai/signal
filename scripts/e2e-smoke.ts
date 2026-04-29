@@ -27,9 +27,10 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const SERVER_CWD = resolve(REPO_ROOT, 'apps/server');
 const DB_PATH = resolve(SERVER_CWD, 'signal.db');
-const PORT = 8080;
+const PORT = Number(process.env.E2E_PORT ?? 18080);
 const BASE = `http://localhost:${PORT}`;
-const WS_URL = `ws://localhost:${PORT}/ws`;
+const AUTH_TOKEN = 'signal-e2e-token';
+const WS_URL = `ws://localhost:${PORT}/ws?token=${encodeURIComponent(AUTH_TOKEN)}`;
 
 let serverProc: ChildProcess | null = null;
 const results: Array<{ step: string; ok: boolean; detail?: string }> = [];
@@ -50,7 +51,7 @@ async function startServer(): Promise<void> {
   const tsxBin = resolve(SERVER_CWD, 'node_modules/.bin/tsx');
   serverProc = spawn(tsxBin, ['src/index.ts'], {
     cwd: SERVER_CWD,
-    env: { ...process.env, PORT: String(PORT), DATABASE_URL: './signal.db' },
+    env: { ...process.env, PORT: String(PORT), DATABASE_URL: './signal.db', SIGNAL_AUTH_TOKEN: AUTH_TOKEN },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -81,7 +82,9 @@ async function Bun_rm(path: string): Promise<void> {
 }
 
 async function http<T = unknown>(path: string, init?: RequestInit): Promise<{ status: number; body: T | string }> {
-  const res = await fetch(`${BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  headers.set('Authorization', `Bearer ${AUTH_TOKEN}`);
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   const text = await res.text();
   let body: T | string = text;
   try { body = JSON.parse(text) as T; } catch {}
@@ -108,7 +111,9 @@ async function probeRestEmpty(): Promise<void> {
   record('POST /api/octamem/query returns null with placeholder key',
     octaRes.status === 200 && (octaRes.body as any)?.context === null);
 
-  const dashboard = await fetch(`${BASE}/dashboard/`);
+  const dashboard = await fetch(`${BASE}/dashboard/`, {
+    headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+  });
   record('GET /dashboard/ serves SPA', dashboard.status === 200,
     `status=${dashboard.status}, content-type=${dashboard.headers.get('content-type')}`);
 }
