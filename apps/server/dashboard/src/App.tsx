@@ -15,7 +15,7 @@ export default function App() {
         <div className="brand">
           <LogoMark size={18} />
           <span>Signal</span>
-          <span className="small">v0.4</span>
+          <span className="small">v0.5</span>
         </div>
 
         <nav className="nav">
