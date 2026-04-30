@@ -4,6 +4,7 @@ import { OctaMemPanel } from './OctaMemPanel';
 
 interface Props {
   prospect: Prospect;
+  connectionReady: boolean;
   onChange: (p: Prospect) => void;
   onStart: (callType: CallType) => void;
 }
@@ -23,11 +24,11 @@ function localPart(email: string): string {
   return at > 0 ? email.slice(0, at) : email;
 }
 
-export function PreCallSetup({ prospect, onChange, onStart }: Props) {
+export function PreCallSetup({ prospect, connectionReady, onChange, onStart }: Props) {
   const [callType, setCallType] = useState<CallType>('investor');
   const [detected, setDetected] = useState<DetectedMeeting | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  const canStart = prospect.name.trim().length > 0;
+  const canStart = connectionReady && prospect.name.trim().length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -35,9 +36,13 @@ export function PreCallSetup({ prospect, onChange, onStart }: Props) {
       try {
         const res = await chrome.runtime.sendMessage({ type: 'NEXT_MEETING' });
         if (!cancelled) setDetected(res?.meeting ?? null);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const showBanner = detected && !dismissed;
@@ -46,7 +51,10 @@ export function PreCallSetup({ prospect, onChange, onStart }: Props) {
   function applyDetected(): void {
     if (!detected) return;
     const primary = detected.attendees.find(a => !a.isOrganizer) ?? detected.attendees[0];
-    if (!primary) { setDismissed(true); return; }
+    if (!primary) {
+      setDismissed(true);
+      return;
+    }
     const name = primary.name?.trim() || localPart(primary.email);
     onChange({ ...prospect, name, email: primary.email });
     setDismissed(true);
@@ -68,35 +76,75 @@ export function PreCallSetup({ prospect, onChange, onStart }: Props) {
             fontSize: 13,
           }}
         >
-          <span role="img" aria-label="calendar">🗓</span>
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span role="img" aria-label="calendar">
+            🗓
+          </span>
+          <span
+            style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
             Detected: <strong>{detected!.title}</strong> in {minutes} min
           </span>
-          <button className="pill active" onClick={applyDetected}>Use this</button>
-          <button className="pill" onClick={() => setDismissed(true)} aria-label="Dismiss">×</button>
+          <button className="pill active" onClick={applyDetected}>
+            Use this
+          </button>
+          <button className="pill" onClick={() => setDismissed(true)} aria-label="Dismiss">
+            ×
+          </button>
         </div>
       )}
 
       <section>
         <h3>Prospect</h3>
-        <label>Name<input value={prospect.name} onChange={e => onChange({ ...prospect, name: e.target.value })} /></label>
-        <label>Company<input value={prospect.company ?? ''} onChange={e => onChange({ ...prospect, company: e.target.value })} /></label>
-        <label>Email<input value={prospect.email ?? ''} onChange={e => onChange({ ...prospect, email: e.target.value })} /></label>
-        <label>LinkedIn URL<input value={prospect.linkedinUrl ?? ''} onChange={e => onChange({ ...prospect, linkedinUrl: e.target.value })} /></label>
+        <label>
+          Name
+          <input
+            value={prospect.name}
+            onChange={e => onChange({ ...prospect, name: e.target.value })}
+          />
+        </label>
+        <label>
+          Company
+          <input
+            value={prospect.company ?? ''}
+            onChange={e => onChange({ ...prospect, company: e.target.value })}
+          />
+        </label>
+        <label>
+          Email
+          <input
+            value={prospect.email ?? ''}
+            onChange={e => onChange({ ...prospect, email: e.target.value })}
+          />
+        </label>
+        <label>
+          LinkedIn URL
+          <input
+            value={prospect.linkedinUrl ?? ''}
+            onChange={e => onChange({ ...prospect, linkedinUrl: e.target.value })}
+          />
+        </label>
       </section>
 
       <section>
         <h3>Call type</h3>
         <div className="pills">
           {CALL_TYPES.map(t => (
-            <button key={t} className={callType === t ? 'pill active' : 'pill'} onClick={() => setCallType(t)}>{t}</button>
+            <button
+              key={t}
+              className={callType === t ? 'pill active' : 'pill'}
+              onClick={() => setCallType(t)}
+            >
+              {t}
+            </button>
           ))}
         </div>
       </section>
 
       <OctaMemPanel prospect={prospect} />
 
-      <button className="start-btn" disabled={!canStart} onClick={() => onStart(callType)}>Start Call</button>
+      <button className="start-btn" disabled={!canStart} onClick={() => onStart(callType)}>
+        {connectionReady ? 'Start Call' : 'Save Connection First'}
+      </button>
     </div>
   );
 }

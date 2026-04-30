@@ -19,6 +19,7 @@ All commands run from: `/Users/mahomedayob/SIGNAL BUILD`
 ## Task 1: Toolchain + monorepo root
 
 **Files:**
+
 - Create: `package.json`
 - Create: `pnpm-workspace.yaml`
 - Create: `turbo.json`
@@ -31,6 +32,7 @@ corepack enable
 corepack prepare pnpm@latest --activate
 pnpm --version
 ```
+
 Expected: prints pnpm version (9.x or 10.x)
 
 **Step 2: Create root `package.json`**
@@ -60,8 +62,8 @@ Expected: prints pnpm version (9.x or 10.x)
 
 ```yaml
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 ```
 
 **Step 4: Create `turbo.json`**
@@ -112,6 +114,7 @@ dist/
 ```bash
 pnpm install
 ```
+
 Expected: `node_modules/.pnpm` created, `pnpm-lock.yaml` generated
 
 **Step 7: Commit**
@@ -126,6 +129,7 @@ git commit -m "chore: init Turborepo monorepo root with pnpm"
 ## Task 2: `@signal/types` package
 
 **Files:**
+
 - Create: `packages/types/package.json`
 - Create: `packages/types/tsconfig.json`
 - Create: `packages/types/index.ts`
@@ -170,14 +174,7 @@ mkdir -p packages/types
 **Step 3: Create `packages/types/index.ts`**
 
 ```ts
-export type PromptType =
-  | 'ASK'
-  | 'CLOSE'
-  | 'WARN'
-  | 'REFRAME'
-  | 'BODY'
-  | 'SILENCE'
-  | 'IDLE';
+export type PromptType = 'ASK' | 'CLOSE' | 'WARN' | 'REFRAME' | 'BODY' | 'SILENCE' | 'IDLE';
 
 export type OverlayState = 'IDLE' | 'LIVE' | 'DANGER' | 'POSTCALL';
 
@@ -232,6 +229,7 @@ export interface PostCallSummary {
 pnpm install
 pnpm --filter @signal/types typecheck
 ```
+
 Expected: exits 0, no errors
 
 **Step 5: Commit**
@@ -246,6 +244,7 @@ git commit -m "feat: add @signal/types shared TypeScript package"
 ## Task 3: `@signal/tokens` package
 
 **Files:**
+
 - Create: `packages/tokens/package.json`
 - Create: `packages/tokens/tokens.css`
 
@@ -271,38 +270,38 @@ mkdir -p packages/tokens
 ```css
 :root {
   /* Glass surfaces */
-  --glass-bg:       rgba(255, 255, 255, 0.72);
-  --glass-border:   rgba(255, 255, 255, 0.55);
-  --glass-shadow:   0 20px 60px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
 
   /* Brand */
-  --accent:         #0071E3;
-  --accent-subtle:  rgba(0, 113, 227, 0.10);
+  --accent: #0071e3;
+  --accent-subtle: rgba(0, 113, 227, 0.1);
 
   /* Semantic */
-  --success:        #30d158;
-  --warning:        #ff9f0a;
-  --danger:         #ff453a;
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
 
   /* Text */
-  --text-primary:   #1d1d1f;
+  --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
-  --text-tertiary:  #aeaeb2;
+  --text-tertiary: #aeaeb2;
 
   /* Radii */
-  --radius-pill:    100px;
-  --radius-lg:      18px;
-  --radius-md:      12px;
-  --radius-sm:      8px;
+  --radius-pill: 100px;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
 
   /* Typography */
-  --font-body:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
-  --font-mono:      'SF Mono', 'Fira Code', monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
 
   /* Motion */
-  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out:       ease-out;
-  --ease-in:        ease-in;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: ease-out;
+  --ease-in: ease-in;
 }
 ```
 
@@ -318,6 +317,7 @@ git commit -m "feat: add @signal/tokens CSS custom properties package"
 ## Task 4: WXT extension scaffold
 
 **Files:**
+
 - Create: `apps/extension/package.json`
 - Create: `apps/extension/tsconfig.json`
 - Create: `apps/extension/wxt.config.ts`
@@ -397,11 +397,7 @@ export default defineConfig({
     description: 'Real-time AI co-pilot for sales & investor calls',
     version: '0.1.0',
     permissions: ['tabs', 'storage'],
-    host_permissions: [
-      '*://meet.google.com/*',
-      '*://*.zoom.us/*',
-      '*://teams.microsoft.com/*',
-    ],
+    host_permissions: ['*://meet.google.com/*', '*://*.zoom.us/*', '*://teams.microsoft.com/*'],
   },
   vite: () => ({
     plugins: [tailwindcss()],
@@ -425,8 +421,8 @@ export default defineBackground(() => {
 **Step 6: Create `apps/extension/assets/styles/globals.css`**
 
 ```css
-@import "tailwindcss";
-@import "@signal/tokens/tokens.css";
+@import 'tailwindcss';
+@import '@signal/tokens/tokens.css';
 
 @theme {
   --color-accent: var(--accent);
@@ -446,18 +442,35 @@ export default defineBackground(() => {
 
 /* Motion keyframes */
 @keyframes border-pulse {
-  0%, 100% { border-color: rgba(255, 159, 10, 0.4); }
-  50%       { border-color: rgba(255, 159, 10, 0.9); }
+  0%,
+  100% {
+    border-color: rgba(255, 159, 10, 0.4);
+  }
+  50% {
+    border-color: rgba(255, 159, 10, 0.9);
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 ```
 
@@ -466,6 +479,7 @@ export default defineBackground(() => {
 ```bash
 pnpm install
 ```
+
 Expected: all packages resolved, lockfile updated
 
 **Step 8: Run WXT prepare to generate types**
@@ -473,6 +487,7 @@ Expected: all packages resolved, lockfile updated
 ```bash
 cd apps/extension && pnpm exec wxt prepare
 ```
+
 Expected: `.wxt/` directory created with generated tsconfig + types
 
 **Step 9: Typecheck**
@@ -480,6 +495,7 @@ Expected: `.wxt/` directory created with generated tsconfig + types
 ```bash
 pnpm --filter extension typecheck
 ```
+
 Expected: 0 errors (only background.ts exists so far)
 
 **Step 10: Commit**
@@ -494,6 +510,7 @@ git commit -m "feat: scaffold WXT extension app and server stub"
 ## Task 5: Server stub
 
 **Files:**
+
 - Create: `apps/server/package.json`
 - Create: `apps/server/src/index.ts`
 
@@ -537,6 +554,7 @@ git commit -m "chore: add server stub (Phase 2 placeholder)"
 ## Task 6: `GlassPanel` component
 
 **Files:**
+
 - Create: `apps/extension/components/GlassPanel.tsx`
 
 **Step 1: Create `GlassPanel.tsx`**
@@ -555,12 +573,7 @@ interface GlassPanelProps {
   className?: string;
 }
 
-export function GlassPanel({
-  variant,
-  danger = false,
-  children,
-  className = '',
-}: GlassPanelProps) {
+export function GlassPanel({ variant, danger = false, children, className = '' }: GlassPanelProps) {
   const base = [
     'relative overflow-hidden',
     // Glass surface
@@ -605,6 +618,7 @@ git commit -m "feat: add GlassPanel base component"
 ## Task 7: `SentimentArc` component
 
 **Files:**
+
 - Create: `apps/extension/components/SentimentArc.tsx`
 
 **Step 1: Create `SentimentArc.tsx`**
@@ -658,9 +672,7 @@ export function SentimentArc({ value, history = [] }: SentimentArcProps) {
             fill="none"
             stroke={color}
             strokeWidth="1.5"
-            points={history
-              .map((v, i) => `${i},${20 - (v / 100) * 20}`)
-              .join(' ')}
+            points={history.map((v, i) => `${i},${20 - (v / 100) * 20}`).join(' ')}
           />
         </svg>
       )}
@@ -681,6 +693,7 @@ git commit -m "feat: add SentimentArc component"
 ## Task 8: `BodyLangRead` component
 
 **Files:**
+
 - Create: `apps/extension/components/BodyLangRead.tsx`
 
 **Step 1: Create `BodyLangRead.tsx`**
@@ -717,17 +730,15 @@ const microVariant: Record<BodyLangReadType['microExpressions'], BadgeVariant> =
 };
 
 const badgeStyles: Record<BadgeVariant, string> = {
-  green:   'bg-[rgba(48,209,88,0.12)] text-[#1a8c3a]',
-  amber:   'bg-[rgba(255,159,10,0.12)] text-[#b06000]',
-  red:     'bg-[rgba(255,69,58,0.12)] text-[#c0392b]',
+  green: 'bg-[rgba(48,209,88,0.12)] text-[#1a8c3a]',
+  amber: 'bg-[rgba(255,159,10,0.12)] text-[#b06000]',
+  red: 'bg-[rgba(255,69,58,0.12)] text-[#c0392b]',
   neutral: 'bg-black/[0.05] text-[--text-secondary]',
 };
 
 function Badge({ label, variant }: { label: string; variant: BadgeVariant }) {
   return (
-    <span
-      className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeStyles[variant]}`}
-    >
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeStyles[variant]}`}>
       {label}
     </span>
   );
@@ -774,6 +785,7 @@ git commit -m "feat: add BodyLangRead component"
 ## Task 9: `PromptCard` component
 
 **Files:**
+
 - Create: `apps/extension/components/PromptCard.tsx`
 
 **Step 1: Create `PromptCard.tsx`**
@@ -790,23 +802,23 @@ interface PromptCardProps {
 }
 
 const typeLabels: Record<SignalPrompt['type'], string> = {
-  ASK:     'ASK · ADVANCE',
-  CLOSE:   'CLOSE · SIGNAL',
-  WARN:    'WARN · DANGER',
+  ASK: 'ASK · ADVANCE',
+  CLOSE: 'CLOSE · SIGNAL',
+  WARN: 'WARN · DANGER',
   REFRAME: 'REFRAME · POSITION',
-  BODY:    'BODY LANG · NUDGE',
+  BODY: 'BODY LANG · NUDGE',
   SILENCE: 'SILENCE · RE-ENGAGE',
-  IDLE:    'SIGNAL · LISTENING',
+  IDLE: 'SIGNAL · LISTENING',
 };
 
 const typeColors: Record<SignalPrompt['type'], string> = {
-  ASK:     'text-[--accent]',
-  CLOSE:   'text-[--success]',
-  WARN:    'text-[--danger]',
+  ASK: 'text-[--accent]',
+  CLOSE: 'text-[--success]',
+  WARN: 'text-[--danger]',
   REFRAME: 'text-[--accent]',
-  BODY:    'text-[#b06000]',
+  BODY: 'text-[#b06000]',
   SILENCE: 'text-[--text-tertiary]',
-  IDLE:    'text-[--text-tertiary]',
+  IDLE: 'text-[--text-tertiary]',
 };
 
 export function PromptCard({ prompt, onDismiss }: PromptCardProps) {
@@ -850,16 +862,12 @@ export function PromptCard({ prompt, onDismiss }: PromptCardProps) {
           isNudge
             ? 'border-[rgba(255,159,10,0.5)] bg-[rgba(255,159,10,0.06)] animate-[border-pulse_1.2s_ease-in-out_infinite]'
             : '',
-          visible
-            ? 'opacity-100 translate-y-0'
-            : 'opacity-0 translate-y-1.5',
+          visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1.5',
         ]
           .filter(Boolean)
           .join(' ')}
       >
-        <p className="text-[11.5px] text-[--text-primary] leading-[1.55]">
-          {displayedPrompt.text}
-        </p>
+        <p className="text-[11.5px] text-[--text-primary] leading-[1.55]">{displayedPrompt.text}</p>
       </div>
 
       {/* Dismiss hint */}
@@ -888,6 +896,7 @@ git commit -m "feat: add PromptCard component with fade transition"
 ## Task 10: `TranscriptFeed` component
 
 **Files:**
+
 - Create: `apps/extension/components/TranscriptFeed.tsx`
 
 **Step 1: Create `TranscriptFeed.tsx`**
@@ -920,16 +929,12 @@ export function TranscriptFeed({ lines, maxVisible = 4 }: TranscriptFeedProps) {
         >
           <div
             className={`text-[9px] font-semibold tracking-[0.06em] uppercase mb-0.5 ${
-              line.speaker === 'prospect'
-                ? 'text-[--accent]'
-                : 'text-[--text-tertiary]'
+              line.speaker === 'prospect' ? 'text-[--accent]' : 'text-[--text-tertiary]'
             }`}
           >
             {line.speaker === 'prospect' ? 'PROSPECT' : 'YOU'}
           </div>
-          <p className="text-[11px] text-[--text-secondary] leading-[1.5] mb-1.5">
-            {line.text}
-          </p>
+          <p className="text-[11px] text-[--text-secondary] leading-[1.5] mb-1.5">{line.text}</p>
         </div>
       ))}
       <div ref={endRef} />
@@ -950,18 +955,14 @@ git commit -m "feat: add TranscriptFeed component with slide-up animation"
 ## Task 11: Zustand store
 
 **Files:**
+
 - Create: `apps/extension/overlay/store.ts`
 
 **Step 1: Create `store.ts`**
 
 ```ts
 import { create } from 'zustand';
-import type {
-  OverlayState,
-  SignalFrame,
-  TranscriptLine,
-  PostCallSummary,
-} from '@signal/types';
+import type { OverlayState, SignalFrame, TranscriptLine, PostCallSummary } from '@signal/types';
 
 interface SignalStore {
   // State
@@ -998,19 +999,18 @@ const DEFAULT_FRAME: SignalFrame = {
   dangerReason: null,
 };
 
-export const useSignalStore = create<SignalStore>((set) => ({
+export const useSignalStore = create<SignalStore>(set => ({
   overlayState: 'IDLE',
   frame: DEFAULT_FRAME,
   transcript: [],
   elapsedSeconds: 0,
   postCallSummary: null,
 
-  setOverlayState: (overlayState) => set({ overlayState }),
-  setFrame: (frame) => set({ frame }),
-  appendTranscriptLine: (line) =>
-    set((s) => ({ transcript: [...s.transcript, line] })),
-  setElapsedSeconds: (elapsedSeconds) => set({ elapsedSeconds }),
-  setPostCallSummary: (postCallSummary) => set({ postCallSummary }),
+  setOverlayState: overlayState => set({ overlayState }),
+  setFrame: frame => set({ frame }),
+  appendTranscriptLine: line => set(s => ({ transcript: [...s.transcript, line] })),
+  setElapsedSeconds: elapsedSeconds => set({ elapsedSeconds }),
+  setPostCallSummary: postCallSummary => set({ postCallSummary }),
   reset: () =>
     set({
       overlayState: 'IDLE',
@@ -1034,6 +1034,7 @@ git commit -m "feat: add Zustand signal store"
 ## Task 12: Mock fixture + unit test
 
 **Files:**
+
 - Create: `apps/extension/mock/fixture.ts`
 - Create: `apps/extension/mock/fixture.test.ts`
 - Create: `apps/extension/vitest.config.ts`
@@ -1066,7 +1067,7 @@ describe('createFixture', () => {
   it('starts in IDLE state', () => {
     const events: string[] = [];
     const stop = createFixture({
-      onOverlayState: (s) => events.push(s),
+      onOverlayState: s => events.push(s),
       onFrame: () => {},
       onTranscriptLine: () => {},
       onPostCallSummary: () => {},
@@ -1079,7 +1080,7 @@ describe('createFixture', () => {
   it('transitions to LIVE after 3s', () => {
     const events: string[] = [];
     const stop = createFixture({
-      onOverlayState: (s) => events.push(s),
+      onOverlayState: s => events.push(s),
       onFrame: () => {},
       onTranscriptLine: () => {},
       onPostCallSummary: () => {},
@@ -1093,7 +1094,7 @@ describe('createFixture', () => {
   it('transitions to DANGER after 15s', () => {
     const events: string[] = [];
     const stop = createFixture({
-      onOverlayState: (s) => events.push(s),
+      onOverlayState: s => events.push(s),
       onFrame: () => {},
       onTranscriptLine: () => {},
       onPostCallSummary: () => {},
@@ -1107,7 +1108,7 @@ describe('createFixture', () => {
   it('transitions to POSTCALL after 40s', () => {
     const events: string[] = [];
     const stop = createFixture({
-      onOverlayState: (s) => events.push(s),
+      onOverlayState: s => events.push(s),
       onFrame: () => {},
       onTranscriptLine: () => {},
       onPostCallSummary: () => {},
@@ -1125,6 +1126,7 @@ describe('createFixture', () => {
 ```bash
 cd apps/extension && pnpm exec vitest run mock/fixture.test.ts
 ```
+
 Expected: FAIL — `Cannot find module './fixture'`
 
 **Step 4: Create `apps/extension/mock/fixture.ts`**
@@ -1265,6 +1267,7 @@ export function createFixture(callbacks: FixtureCallbacks): () => void {
 ```bash
 cd apps/extension && pnpm exec vitest run mock/fixture.test.ts
 ```
+
 Expected: 4 tests PASS
 
 **Step 6: Commit**
@@ -1279,6 +1282,7 @@ git commit -m "feat: add mock fixture state machine with vitest tests"
 ## Task 13: Overlay root component
 
 **Files:**
+
 - Create: `apps/extension/overlay/Overlay.tsx`
 
 **Step 1: Create `Overlay.tsx`**
@@ -1296,19 +1300,32 @@ import { TranscriptFeed } from '../components/TranscriptFeed';
 
 // Format elapsed seconds as MM:SS
 function formatTime(s: number): string {
-  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const m = Math.floor(s / 60)
+    .toString()
+    .padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
 }
 
-function IdlePill({ elapsed, status }: { elapsed: number; status: 'nominal' | 'nudge' | 'danger' }) {
+function IdlePill({
+  elapsed,
+  status,
+}: {
+  elapsed: number;
+  status: 'nominal' | 'nudge' | 'danger';
+}) {
   const dotColor = {
     nominal: 'bg-[--success]',
     nudge: 'bg-[--warning]',
     danger: 'bg-[--danger]',
   }[status];
 
-  const label = status === 'nudge' ? 'Nudge ready' : status === 'danger' ? 'Off track' : `SIGNAL · ${formatTime(elapsed)}`;
+  const label =
+    status === 'nudge'
+      ? 'Nudge ready'
+      : status === 'danger'
+        ? 'Off track'
+        : `SIGNAL · ${formatTime(elapsed)}`;
 
   return (
     <GlassPanel variant="pill">
@@ -1361,20 +1378,28 @@ function PostCallPanel() {
         <span className="text-[12px] font-semibold text-[--text-primary]">
           SIG<span className="text-[--accent]">NAL</span>
         </span>
-        <span className="text-[10px] font-semibold text-[--text-secondary] tracking-[0.04em]">CALL COMPLETE</span>
+        <span className="text-[10px] font-semibold text-[--text-secondary] tracking-[0.04em]">
+          CALL COMPLETE
+        </span>
       </div>
 
       <div className="px-4 py-3 space-y-2">
         {/* Win signals */}
         {postCallSummary.winSignals.map((s, i) => (
-          <div key={i} className="text-[11px] px-3 py-1.5 bg-[rgba(48,209,88,0.08)] rounded-lg text-[#1a8c3a]">
+          <div
+            key={i}
+            className="text-[11px] px-3 py-1.5 bg-[rgba(48,209,88,0.08)] rounded-lg text-[#1a8c3a]"
+          >
             ✓ {s}
           </div>
         ))}
 
         {/* Decisions */}
         {postCallSummary.decisions.map((d, i) => (
-          <div key={i} className="text-[11px] px-3 py-1.5 bg-[--accent-subtle] rounded-lg text-[--accent]">
+          <div
+            key={i}
+            className="text-[11px] px-3 py-1.5 bg-[--accent-subtle] rounded-lg text-[--accent]"
+          >
             → {d}
           </div>
         ))}
@@ -1417,16 +1442,11 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
     return stop;
   }, [useMockFixture]);
 
-  const idleStatus =
-    overlayState === 'DANGER' ? 'danger'
-    : frame?.isNudge ? 'nudge'
-    : 'nominal';
+  const idleStatus = overlayState === 'DANGER' ? 'danger' : frame?.isNudge ? 'nudge' : 'nominal';
 
   return (
     <>
-      {overlayState === 'IDLE' && (
-        <IdlePill elapsed={elapsedSeconds} status={idleStatus} />
-      )}
+      {overlayState === 'IDLE' && <IdlePill elapsed={elapsedSeconds} status={idleStatus} />}
       {(overlayState === 'LIVE' || overlayState === 'DANGER') && (
         <LivePanel elapsed={elapsedSeconds} danger={overlayState === 'DANGER'} />
       )}
@@ -1448,6 +1468,7 @@ git commit -m "feat: add Overlay root component — all 4 states"
 ## Task 14: Dev harness entrypoint
 
 **Files:**
+
 - Create: `apps/extension/entrypoints/harness/index.html`
 - Create: `apps/extension/entrypoints/harness/main.tsx`
 
@@ -1456,27 +1477,31 @@ git commit -m "feat: add Overlay root component — all 4 states"
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SIGNAL Harness</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 100vw;
-      height: 100vh;
-      background: #1a1a2e;
-      background-image:
-        radial-gradient(ellipse at 30% 20%, rgba(0,113,227,0.15) 0%, transparent 60%),
-        radial-gradient(ellipse at 80% 70%, rgba(48,209,88,0.08) 0%, transparent 50%);
-      overflow: hidden;
-    }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="./main.tsx"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIGNAL Harness</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        width: 100vw;
+        height: 100vh;
+        background: #1a1a2e;
+        background-image:
+          radial-gradient(ellipse at 30% 20%, rgba(0, 113, 227, 0.15) 0%, transparent 60%),
+          radial-gradient(ellipse at 80% 70%, rgba(48, 209, 88, 0.08) 0%, transparent 50%);
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
 </html>
 ```
 
@@ -1506,7 +1531,7 @@ function HarnessControls() {
         zIndex: 9999,
       }}
     >
-      {STATES.map((s) => (
+      {STATES.map(s => (
         <button
           key={s}
           onClick={() => setOverlayState(s)}
@@ -1581,6 +1606,7 @@ cd "/Users/mahomedayob/SIGNAL BUILD" && pnpm dev
 Open `http://localhost:3000/harness.html` in Chrome.
 
 Verify:
+
 - [ ] Dark background with gradient renders
 - [ ] IDLE pill appears bottom-right with green dot + "SIGNAL · 00:00"
 - [ ] Auto-cycle: after 3s, panel expands to LIVE state
@@ -1602,6 +1628,7 @@ git commit -m "feat: add dev harness entrypoint with state controls"
 ## Task 15: Content script — shadow DOM injection
 
 **Files:**
+
 - Create: `apps/extension/entrypoints/content.tsx`
 
 **Step 1: Create `content.tsx`**
@@ -1612,11 +1639,7 @@ import { createShadowRootUi } from 'wxt/client';
 import { Overlay } from '../overlay/Overlay';
 
 export default defineContentScript({
-  matches: [
-    '*://meet.google.com/*',
-    '*://*.zoom.us/wc/*',
-    '*://teams.microsoft.com/*',
-  ],
+  matches: ['*://meet.google.com/*', '*://*.zoom.us/wc/*', '*://teams.microsoft.com/*'],
   cssInjectionMode: 'ui',
 
   async main(ctx) {
@@ -1659,6 +1682,7 @@ export default defineContentScript({
 ```bash
 cd "/Users/mahomedayob/SIGNAL BUILD" && pnpm build
 ```
+
 Expected: `.output/chrome-mv3/` directory created, no TypeScript errors
 
 **Step 3: Load in Chrome and verify**
@@ -1687,11 +1711,13 @@ git commit -m "feat: add content script with shadow DOM overlay injection"
 ## Task 16: Final polish + turbo scripts wire-up
 
 **Files:**
+
 - Modify: `apps/extension/package.json` — add `test` script
 
 **Step 1: Add test script to extension `package.json`**
 
 Edit `apps/extension/package.json`, add to scripts:
+
 ```json
 "test": "vitest run"
 ```
@@ -1706,6 +1732,7 @@ pnpm build
 ```
 
 Expected:
+
 - `pnpm typecheck` → 0 errors
 - `pnpm test` → 4 fixture tests PASS
 - `pnpm build` → extension builds to `.output/chrome-mv3/`

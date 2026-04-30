@@ -10,11 +10,7 @@
  * credential-missing or transient errors, never throw.
  */
 
-import {
-  fetchWithTimeout,
-  isBlank,
-  refreshGoogleAccessToken,
-} from './google-auth.js';
+import { fetchWithTimeout, isBlank, refreshGoogleAccessToken } from './google-auth.js';
 
 const API_TIMEOUT_MS = 10_000;
 
@@ -44,8 +40,8 @@ export interface CalendarProvider {
 
 // ── Link extraction ─────────────────────────────────────────────────────
 
-const MEET_RE  = /https:\/\/meet\.google\.com\/[a-z0-9-]+/i;
-const ZOOM_RE  = /https:\/\/[a-z0-9-]*\.?zoom\.us\/j\/[0-9]+(\?[^\s"<>]*)?/i;
+const MEET_RE = /https:\/\/meet\.google\.com\/[a-z0-9-]+/i;
+const ZOOM_RE = /https:\/\/[a-z0-9-]*\.?zoom\.us\/j\/[0-9]+(\?[^\s"<>]*)?/i;
 const TEAMS_RE = /https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s"<>]+/i;
 
 function scanMeetingLink(text: string | undefined): string | undefined {
@@ -90,31 +86,39 @@ class GoogleCalendarProvider implements CalendarProvider {
   constructor(private readonly cfg: GoogleCalendarConfig) {}
 
   async getUpcomingEvents(windowMs: number): Promise<CalendarEvent[]> {
-    const accessToken = await refreshGoogleAccessToken({
-      clientId: this.cfg.clientId,
-      clientSecret: this.cfg.clientSecret,
-      refreshToken: this.cfg.refreshToken,
-    }, 'Google Calendar');
+    const accessToken = await refreshGoogleAccessToken(
+      {
+        clientId: this.cfg.clientId,
+        clientSecret: this.cfg.clientSecret,
+        refreshToken: this.cfg.refreshToken,
+      },
+      'Google Calendar',
+    );
     if (!accessToken) return [];
 
     const now = Date.now();
     const timeMin = new Date(now).toISOString();
     const timeMax = new Date(now + windowMs).toISOString();
-    const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+    const url =
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
       `?timeMin=${encodeURIComponent(timeMin)}` +
       `&timeMax=${encodeURIComponent(timeMax)}` +
       `&singleEvents=true&orderBy=startTime&maxResults=50`;
 
     try {
-      const res = await fetchWithTimeout(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }, API_TIMEOUT_MS);
+      const res = await fetchWithTimeout(
+        url,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+        API_TIMEOUT_MS,
+      );
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         console.error('[SIGNAL] Google Calendar list failed:', res.status, txt);
         return [];
       }
-      const data = await res.json() as { items?: GoogleEvent[] };
+      const data = (await res.json()) as { items?: GoogleEvent[] };
       return (data.items ?? [])
         .map(ev => this.toEvent(ev))
         .filter((ev): ev is CalendarEvent => ev !== null);
@@ -135,7 +139,8 @@ class GoogleCalendarProvider implements CalendarProvider {
       .map(a => ({
         email: a.email!.toLowerCase(),
         name: a.displayName,
-        isOrganizer: !!a.organizer || (!!organizerEmail && a.email?.toLowerCase() === organizerEmail),
+        isOrganizer:
+          !!a.organizer || (!!organizerEmail && a.email?.toLowerCase() === organizerEmail),
       }));
     // If organizer isn't in attendees, add them so we can filter by it later.
     if (organizerEmail && !attendees.some(a => a.email === organizerEmail)) {
@@ -147,8 +152,9 @@ class GoogleCalendarProvider implements CalendarProvider {
     }
 
     // Conference data first; fall back to hangoutLink; finally scan description.
-    const conf = ev.conferenceData?.entryPoints?.find(p => p.entryPointType === 'video')
-      ?? ev.conferenceData?.entryPoints?.[0];
+    const conf =
+      ev.conferenceData?.entryPoints?.find(p => p.entryPointType === 'video') ??
+      ev.conferenceData?.entryPoints?.[0];
     const meetingLink = conf?.uri ?? ev.hangoutLink ?? scanMeetingLink(ev.description);
 
     return {
@@ -215,17 +221,21 @@ async function refreshOutlookAccessToken(cfg: OutlookCalendarConfig): Promise<st
       grant_type: 'refresh_token',
       scope: 'https://graph.microsoft.com/Calendars.Read offline_access',
     });
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }, API_TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+      API_TIMEOUT_MS,
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       console.error('[SIGNAL] Outlook token refresh failed:', res.status, txt);
       return null;
     }
-    const data = await res.json() as { access_token?: string };
+    const data = (await res.json()) as { access_token?: string };
     return data.access_token ?? null;
   } catch (err) {
     console.error('[SIGNAL] Outlook token refresh failed:', err);
@@ -243,24 +253,29 @@ class OutlookCalendarProvider implements CalendarProvider {
     const now = Date.now();
     const startDateTime = new Date(now).toISOString();
     const endDateTime = new Date(now + windowMs).toISOString();
-    const url = 'https://graph.microsoft.com/v1.0/me/calendarview' +
+    const url =
+      'https://graph.microsoft.com/v1.0/me/calendarview' +
       `?startDateTime=${encodeURIComponent(startDateTime)}` +
       `&endDateTime=${encodeURIComponent(endDateTime)}` +
       '&$orderby=start/dateTime&$top=50';
 
     try {
-      const res = await fetchWithTimeout(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Prefer: 'outlook.timezone="UTC"',
+      const res = await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Prefer: 'outlook.timezone="UTC"',
+          },
         },
-      }, API_TIMEOUT_MS);
+        API_TIMEOUT_MS,
+      );
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         console.error('[SIGNAL] Outlook calendarview failed:', res.status, txt);
         return [];
       }
-      const data = await res.json() as { value?: OutlookEvent[] };
+      const data = (await res.json()) as { value?: OutlookEvent[] };
       return (data.value ?? [])
         .map(ev => this.toEvent(ev))
         .filter((ev): ev is CalendarEvent => ev !== null);
@@ -292,7 +307,8 @@ class OutlookCalendarProvider implements CalendarProvider {
     }
 
     const body = ev.body?.content;
-    const meetingLink = ev.onlineMeeting?.joinUrl ?? scanMeetingLink(body) ?? scanMeetingLink(ev.bodyPreview);
+    const meetingLink =
+      ev.onlineMeeting?.joinUrl ?? scanMeetingLink(body) ?? scanMeetingLink(ev.bodyPreview);
 
     return {
       id: ev.id,
@@ -346,21 +362,25 @@ export function createCalendarProvider(config: CalendarProviderConfig): Calendar
 
   const g = config.google;
   if (g && !isBlank(g.clientId) && !isBlank(g.clientSecret) && !isBlank(g.refreshToken)) {
-    providers.push(new GoogleCalendarProvider({
-      clientId: g.clientId!,
-      clientSecret: g.clientSecret!,
-      refreshToken: g.refreshToken!,
-    }));
+    providers.push(
+      new GoogleCalendarProvider({
+        clientId: g.clientId!,
+        clientSecret: g.clientSecret!,
+        refreshToken: g.refreshToken!,
+      }),
+    );
   }
 
   const o = config.outlook;
   if (o && !isBlank(o.clientId) && !isBlank(o.clientSecret) && !isBlank(o.refreshToken)) {
-    providers.push(new OutlookCalendarProvider({
-      clientId: o.clientId!,
-      clientSecret: o.clientSecret!,
-      refreshToken: o.refreshToken!,
-      tenantId: o.tenantId && o.tenantId.trim() !== '' ? o.tenantId : 'common',
-    }));
+    providers.push(
+      new OutlookCalendarProvider({
+        clientId: o.clientId!,
+        clientSecret: o.clientSecret!,
+        refreshToken: o.refreshToken!,
+        tenantId: o.tenantId && o.tenantId.trim() !== '' ? o.tenantId : 'common',
+      }),
+    );
   }
 
   if (providers.length === 0) return null;

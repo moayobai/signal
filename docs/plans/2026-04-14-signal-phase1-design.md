@@ -1,4 +1,5 @@
 # SIGNAL — Phase 1 Design Doc
+
 **Date:** 2026-04-14  
 **Scope:** Monorepo scaffold + Chrome extension overlay UI (mock data only)  
 **Goal:** Loadable, demoable Chrome extension with all 4 overlay states, full Apple Glass design system, pixel-perfect animations. No real API calls.
@@ -7,16 +8,16 @@
 
 ## Decisions
 
-| Decision | Choice | Reason |
-|---|---|---|
-| Package manager | pnpm (via corepack) | Spec requirement. Fast, workspace-native. |
-| Monorepo tool | Turborepo | Spec requirement. Pipeline caching for build/dev. |
-| Extension framework | WXT | Best MV3 + Vite DX. Built-in HMR in Chrome. Thin abstraction. |
-| UI framework | React 18 + TypeScript | Spec requirement. |
-| Styling | Tailwind + CSS custom properties | Tailwind for utilities; tokens.css as the source of truth for design values. |
-| State | Zustand | Spec requirement. Minimal boilerplate. |
-| Dev harness | WXT entrypoint (`entrypoints/harness/`) | Same Vite config and components. No duplication. Full hot reload. |
-| Animation | CSS only (`@keyframes` + transitions) | No animation library. Spec values exactly. |
+| Decision            | Choice                                  | Reason                                                                       |
+| ------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| Package manager     | pnpm (via corepack)                     | Spec requirement. Fast, workspace-native.                                    |
+| Monorepo tool       | Turborepo                               | Spec requirement. Pipeline caching for build/dev.                            |
+| Extension framework | WXT                                     | Best MV3 + Vite DX. Built-in HMR in Chrome. Thin abstraction.                |
+| UI framework        | React 18 + TypeScript                   | Spec requirement.                                                            |
+| Styling             | Tailwind + CSS custom properties        | Tailwind for utilities; tokens.css as the source of truth for design values. |
+| State               | Zustand                                 | Spec requirement. Minimal boilerplate.                                       |
+| Dev harness         | WXT entrypoint (`entrypoints/harness/`) | Same Vite config and components. No duplication. Full hot reload.            |
+| Animation           | CSS only (`@keyframes` + transitions)   | No animation library. Spec values exactly.                                   |
 
 ---
 
@@ -65,34 +66,34 @@ signal/
 ```css
 :root {
   /* Glass surfaces */
-  --glass-bg:       rgba(255, 255, 255, 0.72);
-  --glass-border:   rgba(255, 255, 255, 0.55);
-  --glass-blur:     blur(32px) saturate(180%);
-  --glass-shadow:   0 20px 60px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-blur: blur(32px) saturate(180%);
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
 
   /* Brand */
-  --accent:         #0071E3;
-  --accent-subtle:  rgba(0, 113, 227, 0.10);
+  --accent: #0071e3;
+  --accent-subtle: rgba(0, 113, 227, 0.1);
 
   /* Semantic */
-  --success:        #30d158;
-  --warning:        #ff9f0a;
-  --danger:         #ff453a;
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
 
   /* Text */
-  --text-primary:   #1d1d1f;
+  --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
-  --text-tertiary:  #aeaeb2;
+  --text-tertiary: #aeaeb2;
 
   /* Radii */
-  --radius-pill:    100px;
-  --radius-lg:      18px;
-  --radius-md:      12px;
-  --radius-sm:      8px;
+  --radius-pill: 100px;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
 
   /* Typography */
-  --font-body:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
-  --font-mono:      'SF Mono', 'Fira Code', monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
 }
 ```
 
@@ -121,7 +122,7 @@ export interface BodyLangRead {
 export interface SignalFrame {
   prompt: SignalPrompt;
   bodyLang: BodyLangRead;
-  sentiment: number;       // 0–100
+  sentiment: number; // 0–100
   dangerFlag: boolean;
   dangerReason: string | null;
 }
@@ -147,6 +148,7 @@ export interface CallSession {
 ## Components
 
 ### GlassPanel
+
 Base container. All overlay surfaces extend this.
 
 - `variant: 'pill' | 'panel'` — controls border-radius and width
@@ -155,6 +157,7 @@ Base container. All overlay surfaces extend this.
 - Transition between pill↔panel: `380ms cubic-bezier(0.34, 1.56, 0.64, 1)` on `width`, `height`, `border-radius`
 
 ### PromptCard
+
 Core output unit. Pinned to bottom of panel.
 
 - Props: `type`, `text`, `confidence`, `isNudge`, `onDismiss`
@@ -163,6 +166,7 @@ Core output unit. Pinned to bottom of panel.
 - Swipe right to dismiss (touch + mouse drag)
 
 ### SentimentArc
+
 3px progress bar, full panel width.
 
 - CSS `transition: width 1200ms ease`
@@ -170,6 +174,7 @@ Core output unit. Pinned to bottom of panel.
 - Hover reveals sparkline of last 10 values (SVG, inline)
 
 ### BodyLangRead
+
 Three signal rows: eye contact · posture · micro-expressions.
 
 - Refreshes with a fade transition when values change
@@ -179,6 +184,7 @@ Three signal rows: eye contact · posture · micro-expressions.
   - `engaged/nodding` → green, `thinking` → neutral, `confused/sceptical` → amber/red
 
 ### TranscriptFeed
+
 Scrollable feed, max 4 lines visible.
 
 - New lines: `opacity 0 → 1` + `translateY(4px → 0)` `320ms ease-out`
@@ -190,19 +196,23 @@ Scrollable feed, max 4 lines visible.
 ## Overlay States
 
 ### IDLE
+
 `GlassPanel[variant=pill]` — 44px height, ~180px wide, bottom-right corner.
 Content: coloured status dot + "SIGNAL · MM:SS" elapsed timer.
 Dot colours: green (nominal), amber (nudge ready), red (off track).
 
 ### LIVE
+
 `GlassPanel[variant=panel]` — 280px wide, ~480px tall.
 Stack: header (SIGNAL logo + LIVE pill + timer) → SentimentArc → BodyLangRead → TranscriptFeed → PromptCard.
 
 ### DANGER
+
 LIVE state + `danger=true` on GlassPanel → amber border pulse.
 PromptCard flips to WARN/BODY type. Fires on: 30s silence, pricing objection, competitor mention, disengagement body lang.
 
 ### POSTCALL
+
 GlassPanel[variant=panel] expands.
 Content: win/loss indicators, key objections list, decisions made, follow-up action items.
 Three status rows: "Transcript saved to Granola" / "3 decisions stored to OctaMem" / "Follow-up draft queued".
@@ -228,6 +238,7 @@ t=48s  → resets to IDLE (loop)
 ## Dev Harness (`entrypoints/harness/`)
 
 Full-screen page simulating a Meet call behind the overlay:
+
 - Dark blurred background (mimics video call backdrop)
 - Overlay rendered bottom-right, auto-cycling fixture by default
 - Control strip (top): IDLE / LIVE / DANGER / POSTCALL buttons + auto-cycle toggle + sentiment scrubber
@@ -237,14 +248,14 @@ Full-screen page simulating a Meet call behind the overlay:
 
 ## Motion System
 
-| Event | Duration | Easing | Property |
-|---|---|---|---|
-| Pill → Panel | 380ms | cubic-bezier(0.34, 1.56, 0.64, 1) | width, height, border-radius |
-| Prompt update | 280ms | ease-out | opacity, translateY |
-| Body lang nudge | 180ms | ease-in-out | border pulse, scale(1.01) |
-| Sentiment bar | 1200ms | ease | width |
-| Transcript line in | 320ms | ease-out | opacity, translateY |
-| Danger alert | 200ms | ease-in | border-color, background |
+| Event              | Duration | Easing                            | Property                     |
+| ------------------ | -------- | --------------------------------- | ---------------------------- |
+| Pill → Panel       | 380ms    | cubic-bezier(0.34, 1.56, 0.64, 1) | width, height, border-radius |
+| Prompt update      | 280ms    | ease-out                          | opacity, translateY          |
+| Body lang nudge    | 180ms    | ease-in-out                       | border pulse, scale(1.01)    |
+| Sentiment bar      | 1200ms   | ease                              | width                        |
+| Transcript line in | 320ms    | ease-out                          | opacity, translateY          |
+| Danger alert       | 200ms    | ease-in                           | border-color, background     |
 
 ---
 

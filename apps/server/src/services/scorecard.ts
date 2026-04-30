@@ -19,27 +19,92 @@ interface DimensionDef {
 // MEDDIC gives economicBuyer/champion more weight — these are the two
 // highest-leverage signals for enterprise deal survival.
 const MEDDIC_DIMS: DimensionDef[] = [
-  { key: 'metrics',          label: 'Metrics',           description: 'Quantified business impact the buyer expects', weight: 1 },
-  { key: 'economicBuyer',    label: 'Economic Buyer',    description: 'The person with signing authority is identified', weight: 1.5 },
-  { key: 'decisionCriteria', label: 'Decision Criteria', description: 'Clear criteria the buyer will use to choose a vendor', weight: 1 },
-  { key: 'decisionProcess',  label: 'Decision Process',  description: 'Steps, stakeholders, and timeline are mapped', weight: 1 },
-  { key: 'identifyPain',     label: 'Identify Pain',     description: 'Specific pain is articulated by the buyer', weight: 1 },
-  { key: 'champion',         label: 'Champion',          description: 'An internal advocate is confirmed', weight: 1.5 },
+  {
+    key: 'metrics',
+    label: 'Metrics',
+    description: 'Quantified business impact the buyer expects',
+    weight: 1,
+  },
+  {
+    key: 'economicBuyer',
+    label: 'Economic Buyer',
+    description: 'The person with signing authority is identified',
+    weight: 1.5,
+  },
+  {
+    key: 'decisionCriteria',
+    label: 'Decision Criteria',
+    description: 'Clear criteria the buyer will use to choose a vendor',
+    weight: 1,
+  },
+  {
+    key: 'decisionProcess',
+    label: 'Decision Process',
+    description: 'Steps, stakeholders, and timeline are mapped',
+    weight: 1,
+  },
+  {
+    key: 'identifyPain',
+    label: 'Identify Pain',
+    description: 'Specific pain is articulated by the buyer',
+    weight: 1,
+  },
+  {
+    key: 'champion',
+    label: 'Champion',
+    description: 'An internal advocate is confirmed',
+    weight: 1.5,
+  },
 ];
 
 const SPICED_DIMS: DimensionDef[] = [
-  { key: 'situation',     label: 'Situation',      description: 'Current state of the buyer\'s environment', weight: 1 },
-  { key: 'pain',          label: 'Pain',           description: 'Explicit problem the buyer wants to solve', weight: 1 },
-  { key: 'impact',        label: 'Impact',         description: 'Quantified cost of the pain or upside of solving it', weight: 1 },
-  { key: 'criticalEvent', label: 'Critical Event', description: 'Deadline or trigger that forces a decision', weight: 1 },
-  { key: 'decision',      label: 'Decision',       description: 'Decision process and criteria are clear', weight: 1 },
+  {
+    key: 'situation',
+    label: 'Situation',
+    description: "Current state of the buyer's environment",
+    weight: 1,
+  },
+  {
+    key: 'pain',
+    label: 'Pain',
+    description: 'Explicit problem the buyer wants to solve',
+    weight: 1,
+  },
+  {
+    key: 'impact',
+    label: 'Impact',
+    description: 'Quantified cost of the pain or upside of solving it',
+    weight: 1,
+  },
+  {
+    key: 'criticalEvent',
+    label: 'Critical Event',
+    description: 'Deadline or trigger that forces a decision',
+    weight: 1,
+  },
+  {
+    key: 'decision',
+    label: 'Decision',
+    description: 'Decision process and criteria are clear',
+    weight: 1,
+  },
 ];
 
 const BANT_DIMS: DimensionDef[] = [
-  { key: 'budget',    label: 'Budget',    description: 'Budget is identified or discussed', weight: 1 },
-  { key: 'authority', label: 'Authority', description: 'Decision-making authority is clarified', weight: 1 },
-  { key: 'need',      label: 'Need',      description: 'The buyer has a clear need', weight: 1 },
-  { key: 'timeline',  label: 'Timeline',  description: 'A purchase timeline is established', weight: 1 },
+  { key: 'budget', label: 'Budget', description: 'Budget is identified or discussed', weight: 1 },
+  {
+    key: 'authority',
+    label: 'Authority',
+    description: 'Decision-making authority is clarified',
+    weight: 1,
+  },
+  { key: 'need', label: 'Need', description: 'The buyer has a clear need', weight: 1 },
+  {
+    key: 'timeline',
+    label: 'Timeline',
+    description: 'A purchase timeline is established',
+    weight: 1,
+  },
 ];
 
 function dimsFor(framework: CallFramework): DimensionDef[] {
@@ -98,19 +163,28 @@ function parseScorecard(text: string, framework: CallFramework): ParsedScorecard
       obj.framework !== framework ||
       !Array.isArray(obj.dimensions) ||
       !Array.isArray(obj.nextSteps)
-    ) return null;
+    )
+      return null;
 
-    const validDims: Array<{ key: string; label: string; score: number; justification: string }> = [];
+    const validDims: Array<{ key: string; label: string; score: number; justification: string }> =
+      [];
     for (const d of obj.dimensions) {
       if (
-        !d || typeof d !== 'object' ||
+        !d ||
+        typeof d !== 'object' ||
         typeof d.key !== 'string' ||
         typeof d.label !== 'string' ||
         typeof d.score !== 'number' ||
         typeof d.justification !== 'string'
-      ) return null;
+      )
+        return null;
       const clamped = Math.max(0, Math.min(10, d.score));
-      validDims.push({ key: d.key, label: d.label, score: clamped, justification: d.justification });
+      validDims.push({
+        key: d.key,
+        label: d.label,
+        score: clamped,
+        justification: d.justification,
+      });
     }
     if (validDims.length === 0) return null;
 
@@ -121,7 +195,10 @@ function parseScorecard(text: string, framework: CallFramework): ParsedScorecard
   }
 }
 
-function computeOverall(framework: CallFramework, dims: Array<{ key: string; score: number }>): number {
+function computeOverall(
+  framework: CallFramework,
+  dims: Array<{ key: string; score: number }>,
+): number {
   const defs = dimsFor(framework);
   const weightMap = new Map(defs.map(d => [d.key, d.weight]));
   let weightedSum = 0;
@@ -136,7 +213,9 @@ function computeOverall(framework: CallFramework, dims: Array<{ key: string; sco
   return Math.round((weightedSum / totalWeight) * 10);
 }
 
-export async function generateScorecard(opts: GenerateScorecardOpts): Promise<CallScorecard | null> {
+export async function generateScorecard(
+  opts: GenerateScorecardOpts,
+): Promise<CallScorecard | null> {
   try {
     const text = await opts.ai.complete({
       model: opts.model,

@@ -1,4 +1,5 @@
 import rateLimit from '@fastify/rate-limit';
+import helmet from '@fastify/helmet';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 
@@ -7,6 +8,7 @@ export interface SecurityOptions {
   authDisabled?: boolean;
   rateLimitMax?: number;
   rateLimitWindow?: string | number;
+  secureCookies?: boolean;
 }
 
 const AUTH_COOKIE = 'signal_auth';
@@ -47,10 +49,50 @@ function isPublicPath(url: string): boolean {
   return url === '/health' || url.startsWith('/health?');
 }
 
+function cleanTokenFromUrl(url: string): string {
+  const parsed = new URL(url, 'http://signal.local');
+  parsed.searchParams.delete('token');
+  const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  return path || '/';
+}
+
+function authCookie(authToken: string, secure: boolean): string {
+  const attrs = [
+    `${AUTH_COOKIE}=${encodeURIComponent(authToken)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/',
+    'Max-Age=2592000',
+  ];
+  if (secure) attrs.push('Secure');
+  return attrs.join('; ');
+}
+
 export async function registerSecurity(app: FastifyInstance, opts: SecurityOptions): Promise<void> {
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        upgradeInsecureRequests: opts.secureCookies ? [] : null,
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  });
+
   await app.register(rateLimit, {
     max: opts.rateLimitMax ?? 120,
     timeWindow: opts.rateLimitWindow ?? '1 minute',
+    allowList: req => isPublicPath(req.url),
   });
 
   if (opts.authDisabled) {
@@ -73,10 +115,10 @@ export async function registerSecurity(app: FastifyInstance, opts: SecurityOptio
 
     const queryToken = (req.query as { token?: unknown } | undefined)?.token;
     if (typeof queryToken === 'string' && safeTokenEqual(queryToken, authToken)) {
-      reply.header(
-        'set-cookie',
-        `${AUTH_COOKIE}=${encodeURIComponent(authToken)}; HttpOnly; SameSite=Lax; Path=/`,
-      );
+      reply.header('set-cookie', authCookie(authToken, opts.secureCookies ?? false));
+      if (req.method === 'GET' && req.url.startsWith('/dashboard/')) {
+        return reply.redirect(cleanTokenFromUrl(req.url), 302);
+      }
     }
   });
 }

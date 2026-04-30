@@ -58,9 +58,9 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
 - timestamp: current unix milliseconds`;
 }
 
-export function buildUserPrompt(transcript: Array<{ speaker: string; text: string; timestamp: number }>): string {
-  const lines = transcript
-    .map(l => `[${l.speaker.toUpperCase()}] ${l.text}`)
-    .join('\n');
+export function buildUserPrompt(
+  transcript: Array<{ speaker: string; text: string; timestamp: number }>,
+): string {
+  const lines = transcript.map(l => `[${l.speaker.toUpperCase()}] ${l.text}`).join('\n');
   return `Transcript (last 90s):\n${lines}\n\nReturn the SignalFrame JSON now.`;
 }

@@ -8,15 +8,15 @@ Real-time AI sales coach running live in your browser calls. SIGNAL listens to y
 
 ## What it does
 
-| Feature | Details |
-|---|---|
-| **Live nudges** | Claude Haiku analyses transcript every ~12s and fires `ASK`, `REFRAME`, `WARN`, `CLOSE`, or `SILENCE` cues |
-| **Danger detection** | Sentiment drop, objection keywords, and silence → DANGER state with red pulse |
-| **On-call HUD** | Top-centre nudge card + right-edge sidebar (sentiment ring, speech signals, optional face emotions, cue history, transcript tail) |
-| **Post-call summary** | Claude Sonnet generates win signals, objections, decisions, and a follow-up email draft |
-| **OctaMem memory** | Pre-call context from past interactions; post-call memories pushed back |
-| **CRM dashboard** | Web UI at `/dashboard/` — contacts, call history, analytics, objection tracking |
-| **Prospect detection** | Auto-scrapes participant names from Google Meet, Zoom, Teams |
+| Feature                | Details                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Live nudges**        | Claude Haiku analyses transcript every ~12s and fires `ASK`, `REFRAME`, `WARN`, `CLOSE`, or `SILENCE` cues                        |
+| **Danger detection**   | Sentiment drop, objection keywords, and silence → DANGER state with red pulse                                                     |
+| **On-call HUD**        | Top-centre nudge card + right-edge sidebar (sentiment ring, speech signals, optional face emotions, cue history, transcript tail) |
+| **Post-call summary**  | Claude Sonnet generates win signals, objections, decisions, and a follow-up email draft                                           |
+| **OctaMem memory**     | Pre-call context from past interactions; post-call memories pushed back                                                           |
+| **CRM dashboard**      | Web UI at `/dashboard/` — contacts, call history, analytics, objection tracking                                                   |
+| **Prospect detection** | Auto-scrapes participant names from Google Meet, Zoom, Teams                                                                      |
 
 ## Architecture
 
@@ -104,7 +104,7 @@ fly secrets set \
   DATABASE_URL=/data/signal.db
 ```
 
-Point the extension at your deployed server: set `WS_URL=wss://signal-server.fly.dev` and the same `SIGNAL_AUTH_TOKEN` in `apps/extension/.env` before building.
+Point the extension at your deployed server from the popup **Connection** panel. Packaged builds can still set `WS_URL=wss://signal-server.fly.dev` as a default, but the server URL and auth token are stored at runtime so token rotation does not require rebuilding the extension.
 
 ## Development
 
@@ -117,6 +117,9 @@ pnpm test        # Vitest
 # End-to-end smoke test (no real API keys needed)
 pnpm e2e:smoke
 
+# Browser end-to-end test for dashboard auth + WebSocket lifecycle
+pnpm e2e:browser
+
 # Overlay dev harness (no extension needed)
 pnpm dev:ext     # then open http://localhost:3000/harness.html
 ```
@@ -125,18 +128,22 @@ pnpm dev:ext     # then open http://localhost:3000/harness.html
 
 See [`.env.example`](.env.example) for the full list.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes* | — | Claude API key |
-| `DEEPGRAM_API_KEY` | Yes | — | Deepgram STT key |
-| `OCTAMEM_API_KEY` | No | — | OctaMem memory key |
-| `AI_PROVIDER` | No | `claude` | `claude` or `openrouter` |
-| `DATABASE_URL` | No | `./signal.db` | SQLite file path |
-| `PORT` | No | `8080` | Server port |
-| `SIGNAL_AUTH_TOKEN` | Yes | — | Bearer token required for dashboard, API, and WebSocket access |
-| `SIGNAL_AUTH_DISABLED` | No | `false` | Set to `true` only for local tests/dev without auth |
-| `SIGNAL_RATE_LIMIT_MAX` | No | `120` | Max requests per rate-limit window |
-| `SIGNAL_RATE_LIMIT_WINDOW` | No | `1 minute` | Rate-limit window |
+| Variable                             | Required | Default            | Description                                                                  |
+| ------------------------------------ | -------- | ------------------ | ---------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`                  | Yes\*    | —                  | Claude API key                                                               |
+| `DEEPGRAM_API_KEY`                   | Yes      | —                  | Deepgram STT key                                                             |
+| `OCTAMEM_API_KEY`                    | No       | —                  | OctaMem memory key                                                           |
+| `AI_PROVIDER`                        | No       | `claude`           | `claude` or `openrouter`                                                     |
+| `DATABASE_URL`                       | No       | `./signal.db`      | SQLite file path                                                             |
+| `PORT`                               | No       | `8080`             | Server port                                                                  |
+| `SIGNAL_AUTH_TOKEN`                  | Yes      | —                  | Bearer token required for dashboard, API, and WebSocket access               |
+| `SIGNAL_AUTH_DISABLED`               | No       | `false`            | Set to `true` only for local tests/dev without auth                          |
+| `SIGNAL_RATE_LIMIT_MAX`              | No       | `120`              | Max requests per rate-limit window                                           |
+| `SIGNAL_RATE_LIMIT_WINDOW`           | No       | `1 minute`         | Rate-limit window                                                            |
+| `SIGNAL_BODY_LIMIT_BYTES`            | No       | `1048576`          | Max HTTP request body size                                                   |
+| `SIGNAL_WS_MAX_MESSAGE_BYTES`        | No       | `1048576`          | Max WebSocket message size before close code `1009`                          |
+| `SIGNAL_DB_BACKUP_DIR`               | No       | `<db dir>/backups` | Directory for automatic backups before pending migrations                    |
+| `SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS` | No       | `true`             | Set to `false` only if an external backup system handles migration snapshots |
 
 \* Or `OPENROUTER_API_KEY` if `AI_PROVIDER=openrouter`
 

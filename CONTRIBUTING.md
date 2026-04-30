@@ -5,7 +5,7 @@ Thanks for your interest in contributing. SIGNAL is a self-hosted, single-user t
 ## Getting Started
 
 ```bash
-git clone https://github.com/Alnoorcapital/signal.git
+git clone https://github.com/moayobai/signal.git
 cd signal
 pnpm install
 cp .env.example apps/server/.env
@@ -53,7 +53,8 @@ packages/
 ```bash
 pnpm test               # all packages
 pnpm typecheck          # TypeScript across the monorepo
-node scripts/e2e-smoke.ts  # end-to-end smoke test (no real API keys needed)
+pnpm e2e:smoke          # backend end-to-end smoke test (no real API keys needed)
+pnpm e2e:browser        # browser end-to-end auth + lifecycle test
 ```
 
 ## Submitting a Pull Request
@@ -67,19 +68,21 @@ node scripts/e2e-smoke.ts  # end-to-end smoke test (no real API keys needed)
 
 Key constraints that guide the design:
 
-| Constraint | Reason |
-|---|---|
-| Monolith expansion (all server features in `apps/server`) | Simpler self-hosting |
-| SQLite via Drizzle ORM | Zero-dependency, single-file DB on Fly.io volume |
-| No auth | Self-hosted single-user by design |
-| `CREATE TABLE IF NOT EXISTS` DDL (no migrations) | YAGNI — single user, schema is stable |
-| `NoOpProvider` for missing keys | Graceful degradation over hard startup failures |
+| Constraint                                                | Reason                                                          |
+| --------------------------------------------------------- | --------------------------------------------------------------- |
+| Monolith expansion (all server features in `apps/server`) | Simpler self-hosting                                            |
+| SQLite via Drizzle ORM                                    | Zero-dependency, single-file DB on Fly.io volume                |
+| Token auth required by default                            | Self-hosted single-user does not mean public-by-default         |
+| Startup DDL + tracked migrations                          | Keeps first install simple while preserving idempotent upgrades |
+| Backup before pending migrations                          | Protects the SQLite file before schema changes                  |
+| `NoOpProvider` for missing keys                           | Graceful degradation over hard startup failures                 |
 
 If you're proposing a change that touches one of these constraints, explain why in the PR description.
 
 ## Reporting Issues
 
-Open a [GitHub Issue](https://github.com/Alnoorcapital/signal/issues). Include:
+Open a [GitHub Issue](https://github.com/moayobai/signal/issues). Include:
+
 - Steps to reproduce
 - Expected vs actual behaviour
 - Server logs (redact API keys)

@@ -16,24 +16,36 @@ export function SentimentRing({ value, size = 72, stroke = 5, showLabel = true }
   const offset = c * (1 - v / 100);
 
   const color =
-    value == null ? 'rgba(255,255,255,0.3)'
-    : v >= 70 ? '#34d399'
-    : v >= 50 ? '#fbbf24'
-    : '#fb7185';
+    value == null ? 'rgba(255,255,255,0.3)' : v >= 70 ? '#34d399' : v >= 50 ? '#fbbf24' : '#fb7185';
   const labelSize = Math.max(12, Math.round(size / 4));
 
   return (
-    <div style={{ position: 'relative', display: 'inline-grid', placeItems: 'center', width: size, height: size, color }}>
+    <div
+      style={{
+        position: 'relative',
+        display: 'inline-grid',
+        placeItems: 'center',
+        width: size,
+        height: size,
+        color,
+      }}
+    >
       <svg width={size} height={size} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
         <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" strokeWidth={stroke}
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
           stroke="rgba(255,255,255,0.08)"
         />
         {value != null && (
           <circle
-            cx={size / 2} cy={size / 2} r={r}
-            fill="none" strokeWidth={stroke}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={stroke}
             stroke="currentColor"
             strokeLinecap="round"
             strokeDasharray={c}
@@ -46,14 +58,18 @@ export function SentimentRing({ value, size = 72, stroke = 5, showLabel = true }
         )}
       </svg>
       {showLabel && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'grid', placeItems: 'center',
-          fontFamily: 'JetBrains Mono, SF Mono, ui-monospace, monospace',
-          fontWeight: 500,
-          fontSize: labelSize,
-          letterSpacing: '0.02em',
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'grid',
+            placeItems: 'center',
+            fontFamily: 'JetBrains Mono, SF Mono, ui-monospace, monospace',
+            fontWeight: 500,
+            fontSize: labelSize,
+            letterSpacing: '0.02em',
+          }}
+        >
           {value == null ? '—' : Math.round(value)}
         </div>
       )}

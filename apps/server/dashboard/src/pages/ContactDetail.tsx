@@ -6,34 +6,56 @@ import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, SparkIcon, WarnIcon, CloseIcon } from '../components/icons';
 
 const TYPE_TAG: Record<string, string> = {
-  investor: 'tag-investor', enterprise: 'tag-enterprise',
-  bd: 'tag-bd', customer: 'tag-customer',
+  investor: 'tag-investor',
+  enterprise: 'tag-enterprise',
+  bd: 'tag-bd',
+  customer: 'tag-customer',
 };
 
 function initials(name: string): string {
-  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
 }
 
 function formatWhen(ts: number): string {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(ts).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export default function ContactDetail() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
   const contactQ = useQuery({ queryKey: ['contact', id], queryFn: () => api.contact(id) });
-  const callsQ   = useQuery({ queryKey: ['calls'], queryFn: api.calls });
-  const objQ     = useQuery({ queryKey: ['contact-obj', id], queryFn: () => api.contactObjections(id) });
+  const callsQ = useQuery({ queryKey: ['calls'], queryFn: api.calls });
+  const objQ = useQuery({
+    queryKey: ['contact-obj', id],
+    queryFn: () => api.contactObjections(id),
+  });
 
-  const [form, setForm] = useState({ company: '', role: '', email: '', linkedinUrl: '', notes: '' });
+  const [form, setForm] = useState({
+    company: '',
+    role: '',
+    email: '',
+    linkedinUrl: '',
+    notes: '',
+  });
   useEffect(() => {
-    if (contactQ.data) setForm({
-      company: contactQ.data.company ?? '',
-      role: contactQ.data.role ?? '',
-      email: contactQ.data.email ?? '',
-      linkedinUrl: contactQ.data.linkedinUrl ?? '',
-      notes: contactQ.data.notes ?? '',
-    });
+    if (contactQ.data)
+      setForm({
+        company: contactQ.data.company ?? '',
+        role: contactQ.data.role ?? '',
+        email: contactQ.data.email ?? '',
+        linkedinUrl: contactQ.data.linkedinUrl ?? '',
+        notes: contactQ.data.notes ?? '',
+      });
   }, [contactQ.data]);
 
   const [toast, setToast] = useState(false);
@@ -49,9 +71,9 @@ export default function ContactDetail() {
   });
 
   const myCalls = useMemo<CallSession[]>(
-    () => (callsQ.data ?? []).filter(c => c.contactId === id)
-      .sort((a, b) => b.startedAt - a.startedAt),
-    [callsQ.data, id]
+    () =>
+      (callsQ.data ?? []).filter(c => c.contactId === id).sort((a, b) => b.startedAt - a.startedAt),
+    [callsQ.data, id],
   );
   const sentVals = myCalls.map(c => c.sentimentAvg).filter((s): s is number => s != null);
   const avgSent = sentVals.length ? sentVals.reduce((a, b) => a + b, 0) / sentVals.length : null;
@@ -59,10 +81,11 @@ export default function ContactDetail() {
   // OctaMem live query (returns null with placeholder key — graceful)
   const octaQ = useQuery({
     queryKey: ['octamem', id, contactQ.data?.name, contactQ.data?.company],
-    queryFn: () => api.octamemQuery({
-      name: contactQ.data!.name,
-      company: contactQ.data?.company,
-    }),
+    queryFn: () =>
+      api.octamemQuery({
+        name: contactQ.data!.name,
+        company: contactQ.data?.company,
+      }),
     enabled: !!contactQ.data?.name,
     retry: false,
     staleTime: 30_000,
@@ -71,7 +94,9 @@ export default function ContactDetail() {
   if (!contactQ.data) {
     return (
       <div>
-        <header className="page-head"><div className="skel-title" /></header>
+        <header className="page-head">
+          <div className="skel-title" />
+        </header>
         <div className="skel-card" />
       </div>
     );
@@ -99,28 +124,51 @@ export default function ContactDetail() {
       <div className="detail-grid">
         {/* Left column: editor + calls */}
         <div>
-          <form className="glass" style={{ padding: 24 }}
-            onSubmit={(e) => { e.preventDefault(); update.mutate(form); }}>
+          <form
+            className="glass"
+            style={{ padding: 24 }}
+            onSubmit={e => {
+              e.preventDefault();
+              update.mutate(form);
+            }}
+          >
             <div className="field-grid">
               <div className="field">
                 <label>Company</label>
-                <input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                <input
+                  value={form.company}
+                  onChange={e => setForm({ ...form, company: e.target.value })}
+                />
               </div>
               <div className="field">
                 <label>Role</label>
-                <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} />
+                <input
+                  value={form.role}
+                  onChange={e => setForm({ ...form, role: e.target.value })}
+                />
               </div>
               <div className="field">
                 <label>Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                />
               </div>
               <div className="field">
                 <label>LinkedIn</label>
-                <input type="url" value={form.linkedinUrl} onChange={e => setForm({ ...form, linkedinUrl: e.target.value })} />
+                <input
+                  type="url"
+                  value={form.linkedinUrl}
+                  onChange={e => setForm({ ...form, linkedinUrl: e.target.value })}
+                />
               </div>
               <div className="field full">
                 <label>Notes</label>
-                <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm({ ...form, notes: e.target.value })}
+                />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18, gap: 10 }}>
@@ -144,13 +192,17 @@ export default function ContactDetail() {
                 title="Clear objection filter"
               >
                 <span>Filtered: {filterObjection}</span>
-                <span className="x"><CloseIcon size={11} /></span>
+                <span className="x">
+                  <CloseIcon size={11} />
+                </span>
               </button>
             </div>
           )}
 
           {myCalls.length === 0 ? (
-            <div className="empty glass"><p>No calls with this contact yet.</p></div>
+            <div className="empty glass">
+              <p>No calls with this contact yet.</p>
+            </div>
           ) : (
             <ul className="contact-calls">
               {myCalls.map(c => (
@@ -166,9 +218,14 @@ export default function ContactDetail() {
                       {c.durationMs ? `${Math.round(c.durationMs / 60000)} min` : '—'}
                     </span>
                     <span className="when">
-                      {new Date(c.startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      {new Date(c.startedAt).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
                     </span>
-                    <span className="arrow"><ArrowRightIcon /></span>
+                    <span className="arrow">
+                      <ArrowRightIcon />
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -183,21 +240,25 @@ export default function ContactDetail() {
               <SparkIcon size={11} /> What SIGNAL remembers
             </div>
             <div className="body">
-              {octaQ.isLoading
-                ? <div className="skel-text" style={{ marginBottom: 8 }} />
-                : octaQ.data?.context
-                  ? octaQ.data.context
-                  : <span className="empty">
-                      No prior memory yet. Once you complete calls with {contact.name.split(' ')[0]},
-                      OctaMem will surface what worked and what didn't.
-                    </span>}
+              {octaQ.isLoading ? (
+                <div className="skel-text" style={{ marginBottom: 8 }} />
+              ) : octaQ.data?.context ? (
+                octaQ.data.context
+              ) : (
+                <span className="empty">
+                  No prior memory yet. Once you complete calls with {contact.name.split(' ')[0]},
+                  OctaMem will surface what worked and what didn't.
+                </span>
+              )}
             </div>
           </article>
 
           <article className="objections-card">
             <div className="head">
               <h3>Top objections</h3>
-              <span className="meta"><WarnIcon size={11} /> Across all calls</span>
+              <span className="meta">
+                <WarnIcon size={11} /> Across all calls
+              </span>
             </div>
 
             {objQ.data && objQ.data.length > 0 ? (
@@ -213,14 +274,18 @@ export default function ContactDetail() {
                       title="Click to filter calls (coming soon)"
                       onClick={() => {
                         setFilterObjection(o.objection);
-                        document.getElementById('calls-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        document
+                          .getElementById('calls-section')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }}
                     >
                       <div className="label">
                         <span className="text">{o.objection}</span>
                       </div>
                       <div className="row-flex">
-                        <div className="obj-bar"><div className="fill" style={{ width: `${pct}%` }} /></div>
+                        <div className="obj-bar">
+                          <div className="fill" style={{ width: `${pct}%` }} />
+                        </div>
                         <span className="count">{o.count}</span>
                       </div>
                     </button>

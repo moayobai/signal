@@ -5,8 +5,8 @@ import { useSignalStore } from '../overlay/store';
 import type { ServerMessage } from '@signal/types';
 
 const PLATFORM_SELECTORS = {
-  meet:  '.zWGUib',
-  zoom:  '.participants-entry__name',
+  meet: '.zWGUib',
+  zoom: '.participants-entry__name',
   teams: '[data-tid="roster-participant"]',
 } as const;
 
@@ -22,16 +22,15 @@ function scrapeNames(platform: keyof typeof PLATFORM_SELECTORS): string[] {
   const sel = PLATFORM_SELECTORS[platform];
   const nodes = document.querySelectorAll<HTMLElement>(sel);
   const names = new Set<string>();
-  nodes.forEach(n => { const t = n.textContent?.trim(); if (t && t.length > 1 && t.length < 80) names.add(t); });
+  nodes.forEach(n => {
+    const t = n.textContent?.trim();
+    if (t && t.length > 1 && t.length < 80) names.add(t);
+  });
   return [...names];
 }
 
 export default defineContentScript({
-  matches: [
-    '*://meet.google.com/*',
-    '*://*.zoom.us/wc/*',
-    '*://teams.microsoft.com/*',
-  ],
+  matches: ['*://meet.google.com/*', '*://*.zoom.us/wc/*', '*://teams.microsoft.com/*'],
   cssInjectionMode: 'ui',
 
   async main(ctx) {
@@ -54,7 +53,9 @@ export default defineContentScript({
         root.render(<Overlay useMockFixture={false} />);
         return root;
       },
-      onRemove(root) { root?.unmount(); },
+      onRemove(root) {
+        root?.unmount();
+      },
     });
     ui.mount();
 
@@ -64,7 +65,9 @@ export default defineContentScript({
       const notify = () => {
         const names = scrapeNames(platform);
         if (names.length > 0) {
-          chrome.runtime.sendMessage({ type: 'PROSPECT_DETECTED', platform, names }).catch(() => {});
+          chrome.runtime
+            .sendMessage({ type: 'PROSPECT_DETECTED', platform, names })
+            .catch(() => {});
         }
       };
       notify();
@@ -80,10 +83,18 @@ export default defineContentScript({
     chrome.runtime.onMessage.addListener((msg: ServerMessage) => {
       const store = useSignalStore.getState();
       switch (msg.type) {
-        case 'frame':      store.setFrame(msg.frame); break;
-        case 'transcript': store.appendTranscriptLine(msg.line); break;
-        case 'state':      store.setOverlayState(msg.overlayState); break;
-        case 'connected':  store.setOverlayState('LIVE'); break;
+        case 'frame':
+          store.setFrame(msg.frame);
+          break;
+        case 'transcript':
+          store.appendTranscriptLine(msg.line);
+          break;
+        case 'state':
+          store.setOverlayState(msg.overlayState);
+          break;
+        case 'connected':
+          store.setOverlayState('LIVE');
+          break;
         case 'summary':
           chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
           store.setOverlayState('POSTCALL');

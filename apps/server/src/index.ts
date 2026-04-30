@@ -40,12 +40,21 @@ const SIGNAL_AUTH_TOKEN = process.env.SIGNAL_AUTH_TOKEN ?? '';
 const SIGNAL_AUTH_DISABLED = process.env.SIGNAL_AUTH_DISABLED === 'true';
 const SIGNAL_RATE_LIMIT_MAX = Number(process.env.SIGNAL_RATE_LIMIT_MAX ?? 120);
 const SIGNAL_RATE_LIMIT_WINDOW = process.env.SIGNAL_RATE_LIMIT_WINDOW ?? '1 minute';
+const SIGNAL_BODY_LIMIT_BYTES = Number(process.env.SIGNAL_BODY_LIMIT_BYTES ?? 1_048_576);
+const SIGNAL_WS_MAX_MESSAGE_BYTES = Number(process.env.SIGNAL_WS_MAX_MESSAGE_BYTES ?? 1_048_576);
+const SIGNAL_DB_BACKUP_DIR = process.env.SIGNAL_DB_BACKUP_DIR ?? '';
+const SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS =
+  process.env.SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS !== 'false';
 
 const app = Fastify({
   logger: { transport: { target: 'pino-pretty', options: { colorize: true } } },
+  bodyLimit: SIGNAL_BODY_LIMIT_BYTES,
 });
 
-const db = initDb(DATABASE_URL);
+const db = initDb(DATABASE_URL, {
+  backupDir: SIGNAL_DB_BACKUP_DIR || undefined,
+  backupBeforeMigrations: SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS,
+});
 const ai = createAIProvider({
   provider: AI_PROVIDER,
   anthropicApiKey: ANTHROPIC_API_KEY,
@@ -57,6 +66,7 @@ await registerSecurity(app, {
   authDisabled: SIGNAL_AUTH_DISABLED,
   rateLimitMax: SIGNAL_RATE_LIMIT_MAX,
   rateLimitWindow: SIGNAL_RATE_LIMIT_WINDOW,
+  secureCookies: process.env.NODE_ENV === 'production',
 });
 await app.register(websocketPlugin);
 
@@ -77,7 +87,8 @@ app.setNotFoundHandler((req, reply) => {
 app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
 registerWsRoute(app, {
-  db, ai,
+  db,
+  ai,
   deepgramApiKey: DEEPGRAM_API_KEY,
   deepgramModel: DEEPGRAM_MODEL,
   humeApiKey: HUME_API_KEY,
@@ -89,6 +100,7 @@ registerWsRoute(app, {
   summaryModel: SUMMARY_MODEL,
   scoringFramework: SCORING_FRAMEWORK,
   publicBaseUrl: PUBLIC_BASE_URL || undefined,
+  maxMessageBytes: SIGNAL_WS_MAX_MESSAGE_BYTES,
 });
 registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY, voyageApiKey: VOYAGE_API_KEY });
 
@@ -124,14 +136,20 @@ const calendarPoller = calendarProvider
       provider: calendarProvider,
       db,
       logger: {
-        info: (m) => app.log.info(m),
+        info: m => app.log.info(m),
         error: (m, err) => app.log.error({ err }, m),
       },
     })
   : null;
 
-process.on('SIGTERM', () => { calendarPoller?.stop(); void shutdown('SIGTERM'); });
-process.on('SIGINT',  () => { calendarPoller?.stop(); void shutdown('SIGINT'); });
+process.on('SIGTERM', () => {
+  calendarPoller?.stop();
+  void shutdown('SIGTERM');
+});
+process.on('SIGINT', () => {
+  calendarPoller?.stop();
+  void shutdown('SIGINT');
+});
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' });
@@ -142,12 +160,18 @@ try {
   if (AI_PROVIDER === 'openrouter' && OPENROUTER_API_KEY.startsWith('sk-or-your-key')) {
     app.log.warn('[SIGNAL] OPENROUTER_API_KEY is placeholder — AI disabled');
   }
-  if (DEEPGRAM_API_KEY.startsWith('your-deepgram')) app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
-  if (OCTAMEM_API_KEY.startsWith('your-octamem')) app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
-  if (HUME_API_KEY.startsWith('your-hume')) app.log.warn('[SIGNAL] HUME_API_KEY is placeholder — face emotion analysis disabled');
-  if (VOYAGE_API_KEY.startsWith('your-voyage')) app.log.warn('[SIGNAL] VOYAGE_API_KEY is placeholder — semantic transcript search disabled');
-  if (SLACK_WEBHOOK_URL.startsWith('your-slack')) app.log.warn('[SIGNAL] SLACK_WEBHOOK_URL is placeholder — Slack posting disabled');
-  if (HUBSPOT_API_KEY.startsWith('your-hubspot')) app.log.warn('[SIGNAL] HUBSPOT_API_KEY is placeholder — HubSpot sync disabled');
+  if (DEEPGRAM_API_KEY.startsWith('your-deepgram'))
+    app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
+  if (OCTAMEM_API_KEY.startsWith('your-octamem'))
+    app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
+  if (HUME_API_KEY.startsWith('your-hume'))
+    app.log.warn('[SIGNAL] HUME_API_KEY is placeholder — face emotion analysis disabled');
+  if (VOYAGE_API_KEY.startsWith('your-voyage'))
+    app.log.warn('[SIGNAL] VOYAGE_API_KEY is placeholder — semantic transcript search disabled');
+  if (SLACK_WEBHOOK_URL.startsWith('your-slack'))
+    app.log.warn('[SIGNAL] SLACK_WEBHOOK_URL is placeholder — Slack posting disabled');
+  if (HUBSPOT_API_KEY.startsWith('your-hubspot'))
+    app.log.warn('[SIGNAL] HUBSPOT_API_KEY is placeholder — HubSpot sync disabled');
   if (!SIGNAL_AUTH_DISABLED) app.log.info('[SIGNAL] HTTP auth enabled');
   if (!calendarProvider) {
     app.log.warn('[SIGNAL] No calendar provider configured — pre-call meeting detection disabled');

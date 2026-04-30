@@ -36,7 +36,8 @@ function parseSummary(text: string): PostCallSummary | null {
       !Array.isArray(obj.objections) ||
       !Array.isArray(obj.decisions) ||
       typeof obj.followUpDraft !== 'string'
-    ) return null;
+    )
+      return null;
     return obj as PostCallSummary;
   } catch {
     return null;

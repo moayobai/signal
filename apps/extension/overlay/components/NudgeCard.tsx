@@ -37,7 +37,9 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
     >
       <div className="head">
         <div className="label">
-          <span className={`badge ${typeClass}`} title={badgeTooltip(frame.prompt.type)}>{userFacingLabel(frame.prompt.type)}</span>
+          <span className={`badge ${typeClass}`} title={badgeTooltip(frame.prompt.type)}>
+            {userFacingLabel(frame.prompt.type)}
+          </span>
           <span className="meta">Signal · {pct}% confidence</span>
         </div>
         {onDismiss && (
@@ -47,7 +49,15 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
             aria-label="Dismiss nudge (Escape)"
             title="Dismiss — Escape to snooze 5s"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            >
               <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" />
             </svg>
           </button>
@@ -56,13 +66,13 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
 
       <div className="body">{frame.prompt.text}</div>
 
-      {danger && frame.dangerReason && (
-        <div className="danger-reason">⚠ {frame.dangerReason}</div>
-      )}
+      {danger && frame.dangerReason && <div className="danger-reason">⚠ {frame.dangerReason}</div>}
 
       <div className="conf" style={{ color: getTypeColor(frame.prompt.type) }}>
         <span>confidence</span>
-        <div className="bar"><div className="fill" style={{ width: `${pct}%` }} /></div>
+        <div className="bar">
+          <div className="fill" style={{ width: `${pct}%` }} />
+        </div>
         <span>{pct}%</span>
       </div>
     </div>
@@ -71,24 +81,38 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
 
 function getTypeColor(type: string): string {
   switch (type) {
-    case 'ASK':     return '#60a5fa';
-    case 'CLOSE':   return '#34d399';
-    case 'WARN':    return '#fb7185';
-    case 'REFRAME': return '#c084fc';
-    case 'BODY':    return '#fbbf24';
-    case 'SILENCE': return '#94a3b8';
-    default:        return '#64748b';
+    case 'ASK':
+      return '#60a5fa';
+    case 'CLOSE':
+      return '#34d399';
+    case 'WARN':
+      return '#fb7185';
+    case 'REFRAME':
+      return '#c084fc';
+    case 'BODY':
+      return '#fbbf24';
+    case 'SILENCE':
+      return '#94a3b8';
+    default:
+      return '#64748b';
   }
 }
 
 function badgeTooltip(type: string): string {
   switch (type) {
-    case 'ASK':     return 'Ask — surface a question to keep them engaged';
-    case 'CLOSE':   return 'Close — buying signal detected, push for next step';
-    case 'WARN':    return 'Warn — something is off, course-correct now';
-    case 'REFRAME': return 'Reframe — shift the angle of the conversation';
-    case 'BODY':    return 'Body — prospect signals need attention';
-    case 'SILENCE': return 'Silence — prospect is thinking, give them space';
-    default:        return 'Signal';
+    case 'ASK':
+      return 'Ask — surface a question to keep them engaged';
+    case 'CLOSE':
+      return 'Close — buying signal detected, push for next step';
+    case 'WARN':
+      return 'Warn — something is off, course-correct now';
+    case 'REFRAME':
+      return 'Reframe — shift the angle of the conversation';
+    case 'BODY':
+      return 'Body — prospect signals need attention';
+    case 'SILENCE':
+      return 'Silence — prospect is thinking, give them space';
+    default:
+      return 'Signal';
   }
 }

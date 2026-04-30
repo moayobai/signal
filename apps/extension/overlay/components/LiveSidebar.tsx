@@ -13,12 +13,14 @@ interface Props {
 
 const BODY_LABELS: Array<{ k: keyof BodyLangRead; label: string }> = [
   { k: 'engagement', label: 'Engagement' },
-  { k: 'energy',     label: 'Energy' },
-  { k: 'tone',       label: 'Tone' },
+  { k: 'energy', label: 'Energy' },
+  { k: 'tone', label: 'Tone' },
 ];
 
 function formatTime(s: number): string {
-  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const m = Math.floor(s / 60)
+    .toString()
+    .padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
 }
@@ -33,7 +35,15 @@ function FaceSignalsPanel({ signals }: { signals: FaceSignals }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'var(--sig-font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sig-ink-3)' }}>
+        <span
+          style={{
+            fontFamily: 'var(--sig-font-mono)',
+            fontSize: 9,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--sig-ink-3)',
+          }}
+        >
           Dominant
         </span>
         <span style={{ fontSize: 12, color: 'var(--sig-ink-1)', letterSpacing: '-0.005em' }}>
@@ -41,23 +51,41 @@ function FaceSignalsPanel({ signals }: { signals: FaceSignals }) {
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'var(--sig-font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sig-ink-3)' }}>
+        <span
+          style={{
+            fontFamily: 'var(--sig-font-mono)',
+            fontSize: 9,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--sig-ink-3)',
+          }}
+        >
           Attention
         </span>
-        <span style={{ fontSize: 11, color: signals.attention >= 0.8 ? 'var(--sig-pos)' : 'var(--sig-neutral)' }}>
+        <span
+          style={{
+            fontSize: 11,
+            color: signals.attention >= 0.8 ? 'var(--sig-pos)' : 'var(--sig-neutral)',
+          }}
+        >
           {Math.round(signals.attention * 100)}%
         </span>
       </div>
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
         {signals.topEmotions.map(e => (
-          <span key={e.name} style={{
-            fontFamily: 'var(--sig-font-mono)', fontSize: 9,
-            padding: '2px 6px', borderRadius: 999,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: emotionColor(e.score),
-            letterSpacing: '0.04em',
-          }}>
+          <span
+            key={e.name}
+            style={{
+              fontFamily: 'var(--sig-font-mono)',
+              fontSize: 9,
+              padding: '2px 6px',
+              borderRadius: 999,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              color: emotionColor(e.score),
+              letterSpacing: '0.04em',
+            }}
+          >
             {e.name} {Math.round(e.score * 100)}%
           </span>
         ))}
@@ -75,15 +103,20 @@ function ago(ms: number): string {
 }
 
 export function LiveSidebar({
-  frame, prevSentiment, cueHistory, transcript, elapsedSeconds, danger, onCollapse,
+  frame,
+  prevSentiment,
+  cueHistory,
+  transcript,
+  elapsedSeconds,
+  danger,
+  onCollapse,
 }: Props) {
   // `elapsedSeconds` ticks every second, keeping renders fresh.
   // Compute `now` at render time so ago() values are accurate.
   const now = Date.now();
   const sentiment = frame?.sentiment ?? null;
-  const delta = sentiment != null && prevSentiment != null
-    ? Math.round(sentiment - prevSentiment)
-    : null;
+  const delta =
+    sentiment != null && prevSentiment != null ? Math.round(sentiment - prevSentiment) : null;
   const tail = transcript.slice(-5);
 
   return (
@@ -101,7 +134,13 @@ export function LiveSidebar({
                 </linearGradient>
               </defs>
               <circle cx="6" cy="6" r="5.25" stroke="url(#sig-brand-grad)" strokeWidth="1.2" />
-              <circle cx="6.85" cy="5.65" r="3.35" stroke="url(#sig-brand-grad)" strokeWidth="1.2" />
+              <circle
+                cx="6.85"
+                cy="5.65"
+                r="3.35"
+                stroke="url(#sig-brand-grad)"
+                strokeWidth="1.2"
+              />
               <circle cx="6" cy="6" r="1.2" fill="url(#sig-brand-grad)" />
             </svg>
           </span>
@@ -116,12 +155,25 @@ export function LiveSidebar({
               onClick={onCollapse}
               aria-label="minimise"
               style={{
-                padding: 4, background: 'transparent', border: 'none',
-                color: 'rgba(255,255,255,0.4)', borderRadius: 6,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: 4,
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.4)',
+                borderRadius: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
                 <path d="M3 6h6" />
               </svg>
             </button>
@@ -140,7 +192,9 @@ export function LiveSidebar({
               <span className={`delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}`}>
                 {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'} {Math.abs(delta)} vs prior
               </span>
-            ) : <span className="delta">awaiting baseline</span>}
+            ) : (
+              <span className="delta">awaiting baseline</span>
+            )}
           </div>
         </div>
       </section>
@@ -155,7 +209,9 @@ export function LiveSidebar({
             {BODY_LABELS.map(({ k, label }) => (
               <div className="row" key={k}>
                 <span className="k">{label}</span>
-                <span className="v" data-val={frame.bodyLang[k]}>{frame.bodyLang[k]}</span>
+                <span className="v" data-val={frame.bodyLang[k]}>
+                  {frame.bodyLang[k]}
+                </span>
               </div>
             ))}
           </div>
@@ -167,36 +223,62 @@ export function LiveSidebar({
         <section className="section">
           <div className="label">
             <span>Face</span>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>HUME AI</span>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>
+              HUME AI
+            </span>
           </div>
           <FaceSignalsPanel signals={frame.faceSignals} />
         </section>
       )}
 
       {/* Cues feed */}
-      <section className="section" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <section
+        className="section"
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+      >
         <div className="label">
           <span>Cues</span>
           <span style={{ color: 'rgba(255,255,255,0.22)' }}>{cueHistory.length}</span>
         </div>
         <div className="cues">
           {cueHistory.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', padding: '4px 0' }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: 'rgba(255,255,255,0.3)',
+                fontStyle: 'italic',
+                padding: '4px 0',
+              }}
+            >
               Listening — first cue soon.
             </div>
-          ) : cueHistory.slice().reverse().map((c, i) => (
-            <div key={c.receivedAt} className={`cue ${i === 0 ? 'active' : ''}`}>
-              <div className="cue-head">
-                <span className={`sig-badge-${c.frame.prompt.type}`} style={{
-                  padding: '2px 7px', borderRadius: 999,
-                  fontFamily: 'JetBrains Mono, SF Mono, ui-monospace, monospace',
-                  fontSize: 9, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase',
-                }}>{c.frame.prompt.type}</span>
-                <span className="age">{ago(now - c.receivedAt)}</span>
-              </div>
-              <div className="text">{c.frame.prompt.text}</div>
-            </div>
-          ))}
+          ) : (
+            cueHistory
+              .slice()
+              .reverse()
+              .map((c, i) => (
+                <div key={c.receivedAt} className={`cue ${i === 0 ? 'active' : ''}`}>
+                  <div className="cue-head">
+                    <span
+                      className={`sig-badge-${c.frame.prompt.type}`}
+                      style={{
+                        padding: '2px 7px',
+                        borderRadius: 999,
+                        fontFamily: 'JetBrains Mono, SF Mono, ui-monospace, monospace',
+                        fontSize: 9,
+                        fontWeight: 500,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {c.frame.prompt.type}
+                    </span>
+                    <span className="age">{ago(now - c.receivedAt)}</span>
+                  </div>
+                  <div className="text">{c.frame.prompt.text}</div>
+                </div>
+              ))
+          )}
         </div>
       </section>
 
@@ -209,12 +291,14 @@ export function LiveSidebar({
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
             Awaiting audio…
           </div>
-        ) : tail.map((l, i) => (
-          <div className="line" key={i}>
-            <span className={`speaker ${l.speaker}`}>{l.speaker}</span>
-            <span className="text-line">{l.text}</span>
-          </div>
-        ))}
+        ) : (
+          tail.map((l, i) => (
+            <div className="line" key={i}>
+              <span className={`speaker ${l.speaker}`}>{l.speaker}</span>
+              <span className="text-line">{l.text}</span>
+            </div>
+          ))
+        )}
       </section>
     </aside>
   );

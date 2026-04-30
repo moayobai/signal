@@ -1,11 +1,4 @@
-export type PromptType =
-  | 'ASK'
-  | 'CLOSE'
-  | 'WARN'
-  | 'REFRAME'
-  | 'BODY'
-  | 'SILENCE'
-  | 'IDLE';
+export type PromptType = 'ASK' | 'CLOSE' | 'WARN' | 'REFRAME' | 'BODY' | 'SILENCE' | 'IDLE';
 
 /**
  * Collapses the 7 internal PromptType values into 2 user-facing categories
@@ -93,14 +86,14 @@ export type CallFramework = 'MEDDIC' | 'SPICED' | 'BANT';
  */
 export interface CallScorecard {
   framework: CallFramework;
-  overallScore: number;      // 0–100, weighted average of dimensions
+  overallScore: number; // 0–100, weighted average of dimensions
   dimensions: Array<{
     key: string;
     label: string;
-    score: number;           // 0–10
-    justification: string;   // 1–2 sentences
+    score: number; // 0–10
+    justification: string; // 1–2 sentences
   }>;
-  nextSteps: string[];       // 2–4 concrete next actions
+  nextSteps: string[]; // 2–4 concrete next actions
 }
 
 export type CallType = 'investor' | 'enterprise' | 'bd' | 'customer';

@@ -9,12 +9,7 @@ interface GlassPanelProps {
   className?: string;
 }
 
-export function GlassPanel({
-  variant,
-  danger = false,
-  children,
-  className = '',
-}: GlassPanelProps) {
+export function GlassPanel({ variant, danger = false, children, className = '' }: GlassPanelProps) {
   const base = [
     'relative overflow-hidden',
     'bg-white/[0.72]',

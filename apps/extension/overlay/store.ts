@@ -1,10 +1,5 @@
 import { create } from 'zustand';
-import type {
-  OverlayState,
-  SignalFrame,
-  TranscriptLine,
-  PostCallSummary,
-} from '@signal/types';
+import type { OverlayState, SignalFrame, TranscriptLine, PostCallSummary } from '@signal/types';
 
 interface CueHistoryEntry {
   frame: SignalFrame;
@@ -50,7 +45,7 @@ const DEFAULT_FRAME: SignalFrame = {
 
 const MAX_CUES = 10;
 
-export const useSignalStore = create<SignalStore>((set) => ({
+export const useSignalStore = create<SignalStore>(set => ({
   overlayState: 'IDLE',
   frame: DEFAULT_FRAME,
   prevSentiment: null,
@@ -60,28 +55,25 @@ export const useSignalStore = create<SignalStore>((set) => ({
   elapsedSeconds: 0,
   postCallSummary: null,
 
-  setOverlayState: (overlayState) => set({ overlayState }),
+  setOverlayState: overlayState => set({ overlayState }),
 
-  setFrame: (frame) => set((s) => {
-    const isRealCue = frame.prompt.type !== 'IDLE';
-    const next: Partial<SignalStore> = {
-      frame,
-      prevSentiment: s.frame?.sentiment ?? null,
-      frameVersion: s.frameVersion + 1,
-    };
-    if (isRealCue) {
-      next.cueHistory = [
-        ...s.cueHistory,
-        { frame, receivedAt: Date.now() },
-      ].slice(-MAX_CUES);
-    }
-    return next;
-  }),
+  setFrame: frame =>
+    set(s => {
+      const isRealCue = frame.prompt.type !== 'IDLE';
+      const next: Partial<SignalStore> = {
+        frame,
+        prevSentiment: s.frame?.sentiment ?? null,
+        frameVersion: s.frameVersion + 1,
+      };
+      if (isRealCue) {
+        next.cueHistory = [...s.cueHistory, { frame, receivedAt: Date.now() }].slice(-MAX_CUES);
+      }
+      return next;
+    }),
 
-  appendTranscriptLine: (line) =>
-    set((s) => ({ transcript: [...s.transcript, line] })),
-  setElapsedSeconds: (elapsedSeconds) => set({ elapsedSeconds }),
-  setPostCallSummary: (postCallSummary) => set({ postCallSummary }),
+  appendTranscriptLine: line => set(s => ({ transcript: [...s.transcript, line] })),
+  setElapsedSeconds: elapsedSeconds => set({ elapsedSeconds }),
+  setPostCallSummary: postCallSummary => set({ postCallSummary }),
 
   reset: () =>
     set({

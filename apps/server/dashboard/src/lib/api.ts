@@ -1,35 +1,59 @@
-import type { CallFramework, CallScorecard } from '@signal/types';
+import type { CallScorecard } from '@signal/types';
 export type { CallFramework, CallScorecard } from '@signal/types';
 
 const BASE = '/api';
 
 export interface Contact {
-  id: string; name: string; email?: string; linkedinUrl?: string;
-  company?: string; role?: string; notes?: string; octamemId?: string;
-  createdAt: number; updatedAt: number;
+  id: string;
+  name: string;
+  email?: string;
+  linkedinUrl?: string;
+  company?: string;
+  role?: string;
+  notes?: string;
+  octamemId?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 export interface CallSession {
-  id: string; contactId: string | null; platform: string; callType: string;
-  startedAt: number; endedAt: number | null; durationMs: number | null;
+  id: string;
+  contactId: string | null;
+  platform: string;
+  callType: string;
+  startedAt: number;
+  endedAt: number | null;
+  durationMs: number | null;
   sentimentAvg: number | null;
   userWords?: number;
   prospectWords?: number;
   talkRatio?: number | null;
   longestMonologueMs?: number | null;
 }
-export interface TranscriptLine { id: number; speaker: string; text: string; timestamp: number; }
+export interface TranscriptLine {
+  id: number;
+  speaker: string;
+  text: string;
+  timestamp: number;
+}
 export interface SignalFrameRow {
   id: number;
   /** Alias of `createdAt` — kept for backwards compat with existing components. */
   timestamp: number;
   /** Milliseconds from call start — use to render MM:SS timestamp in UI */
   offsetMs: number;
-  promptType: string; promptText: string;
-  confidence: number; sentiment: number; dangerFlag: number; createdAt: number;
+  promptType: string;
+  promptText: string;
+  confidence: number;
+  sentiment: number;
+  dangerFlag: number;
+  createdAt: number;
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -49,8 +73,11 @@ function friendlyMessage(status: number, path: string): string {
   return `Unexpected error (${status})`;
 }
 export interface CallSummaryRow {
-  winSignals: string[]; objections: string[]; decisions: string[];
-  followUpDraft: string; createdAt: number;
+  winSignals: string[];
+  objections: string[];
+  decisions: string[];
+  followUpDraft: string;
+  createdAt: number;
   scorecard: CallScorecard | null;
 }
 
@@ -78,36 +105,55 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  contacts:        () => j<Contact[]>('/contacts'),
-  contact:    (id: string) => j<Contact>(`/contacts/${id}`),
+  contacts: () => j<Contact[]>('/contacts'),
+  contact: (id: string) => j<Contact>(`/contacts/${id}`),
   createContact: (body: Partial<Contact>) =>
-    j<Contact>('/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    j<Contact>('/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   updateContact: (id: string, body: Partial<Contact>) =>
-    j<Contact>(`/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    j<Contact>(`/contacts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   contactObjections: (id: string) =>
     j<Array<{ objection: string; count: number }>>(`/contacts/${id}/objections`),
   octamemQuery: (prospect: { name: string; company?: string }) =>
     j<{ context: string | null }>('/octamem/query', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prospect }),
     }),
-  calls:           () => j<CallSession[]>('/calls'),
-  call:       (id: string) => j<CallSession>(`/calls/${id}`),
+  calls: () => j<CallSession[]>('/calls'),
+  call: (id: string) => j<CallSession>(`/calls/${id}`),
   transcript: (id: string) => j<TranscriptLine[]>(`/calls/${id}/transcript`),
-  frames:     (id: string) => j<SignalFrameRow[]>(`/calls/${id}/frames`),
-  summary:    (id: string) => j<CallSummaryRow>(`/calls/${id}/summary`),
-  sentimentTrend: () => j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
-  promptTypes:    () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
-  objections:     () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
-  nextMeeting:     () => j<UpcomingMeeting | null>('/calendar/next'),
+  frames: (id: string) => j<SignalFrameRow[]>(`/calls/${id}/frames`),
+  summary: (id: string) => j<CallSummaryRow>(`/calls/${id}/summary`),
+  sentimentTrend: () =>
+    j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
+  promptTypes: () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
+  objections: () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
+  nextMeeting: () => j<UpcomingMeeting | null>('/calendar/next'),
   upcomingMeetings: () => j<UpcomingMeeting[]>('/calendar/upcoming'),
   searchTranscripts: (q: string, limit = 10) =>
-    j<Array<{
-      sessionId: string; chunkIndex: number; speaker: string; text: string;
-      similarity: number; contactId: string | null; contactName: string | null;
-      contactCompany?: string | null; calledAt: number | null;
-    }>>(
-      '/search/transcripts',
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, limit }) }
-    ),
+    j<
+      Array<{
+        sessionId: string;
+        chunkIndex: number;
+        speaker: string;
+        text: string;
+        similarity: number;
+        contactId: string | null;
+        contactName: string | null;
+        contactCompany?: string | null;
+        calledAt: number | null;
+      }>
+    >('/search/transcripts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, limit }),
+    }),
 };

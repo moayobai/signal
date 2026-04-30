@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "@signal/tokens/tokens.css";
+@import 'tailwindcss';
+@import '@signal/tokens/tokens.css';
 
 @theme {
   --color-accent: var(--accent);
@@ -19,16 +19,33 @@
 
 /* Motion keyframes */
 @keyframes border-pulse {
-  0%, 100% { border-color: rgba(255, 159, 10, 0.4); }
-  50%       { border-color: rgba(255, 159, 10, 0.9); }
+  0%,
+  100% {
+    border-color: rgba(255, 159, 10, 0.4);
+  }
+  50% {
+    border-color: rgba(255, 159, 10, 0.9);
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

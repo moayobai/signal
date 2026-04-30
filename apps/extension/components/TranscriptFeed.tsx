@@ -16,7 +16,7 @@ export function TranscriptFeed({ lines, maxVisible = 4 }: TranscriptFeedProps) {
 
   return (
     <div className="px-4 py-2.5 border-b border-black/5 max-h-[88px] overflow-hidden">
-      {visibleLines.map((line) => (
+      {visibleLines.map(line => (
         <div
           key={line.timestamp}
           className="animate-[slide-up_320ms_ease-out]"
@@ -29,9 +29,7 @@ export function TranscriptFeed({ lines, maxVisible = 4 }: TranscriptFeedProps) {
           >
             {line.speaker === 'prospect' ? 'PROSPECT' : 'YOU'}
           </div>
-          <p className="text-[11px] text-[--text-secondary] leading-[1.5] mb-1.5">
-            {line.text}
-          </p>
+          <p className="text-[11px] text-[--text-secondary] leading-[1.5] mb-1.5">{line.text}</p>
         </div>
       ))}
       <div ref={endRef} />
