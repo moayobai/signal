@@ -7,7 +7,9 @@ function isPlaceholder(key: string): boolean {
   return PLACEHOLDER_PREFIXES.some(p => key.startsWith(p));
 }
 
-function baseUrl(): string { return process.env.OCTAMEM_BASE_URL ?? DEFAULT_BASE; }
+function baseUrl(): string {
+  return process.env.OCTAMEM_BASE_URL ?? DEFAULT_BASE;
+}
 
 /** Fetch with hard timeout — OctaMem failures must never block the call flow. */
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
@@ -33,13 +35,17 @@ export async function queryProspectContext(opts: QueryOpts): Promise<string | nu
   if (isPlaceholder(opts.apiKey)) return null;
   const query = `${opts.prospect.name}${opts.prospect.company ? ' at ' + opts.prospect.company : ''} — what do we know?`;
   try {
-    const res = await fetchWithTimeout(`${baseUrl()}/v1/query`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, previousContext: opts.previousOctamemId }),
-    }, QUERY_TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      `${baseUrl()}/v1/query`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, previousContext: opts.previousOctamemId }),
+      },
+      QUERY_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
-    const data = await res.json() as { result?: string };
+    const data = (await res.json()) as { result?: string };
     return data.result ?? null;
   } catch (err) {
     console.error('[SIGNAL] OctaMem query failed:', err);
@@ -73,7 +79,10 @@ function formatMemory(o: StoreOpts): string {
     `Follow-up: "${summary.followUpDraft}"`,
   ];
   if (dangerMoments.length > 0) {
-    lines.push('', `Danger moments: ${dangerMoments.map(d => `${d.reason}@${d.timestamp}`).join('; ')}`);
+    lines.push(
+      '',
+      `Danger moments: ${dangerMoments.map(d => `${d.reason}@${d.timestamp}`).join('; ')}`,
+    );
   }
   return lines.join('\n');
 }
@@ -81,13 +90,20 @@ function formatMemory(o: StoreOpts): string {
 export async function storeCallMemory(opts: StoreOpts): Promise<string | null> {
   if (isPlaceholder(opts.apiKey)) return null;
   try {
-    const res = await fetchWithTimeout(`${baseUrl()}/v1/add`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: formatMemory(opts), previousContext: opts.previousOctamemId }),
-    }, STORE_TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      `${baseUrl()}/v1/add`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: formatMemory(opts),
+          previousContext: opts.previousOctamemId,
+        }),
+      },
+      STORE_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
-    const data = await res.json() as { id?: string };
+    const data = (await res.json()) as { id?: string };
     return data.id ?? null;
   } catch (err) {
     console.error('[SIGNAL] OctaMem store failed:', err);

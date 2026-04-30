@@ -4,7 +4,9 @@ import websocketPlugin from '@fastify/websocket';
 import WebSocket from 'ws';
 
 const deepgramMock = vi.hoisted(() => ({
-  options: null as null | { onTranscript: (line: { speaker: 'user' | 'prospect'; text: string; timestamp: number }) => void },
+  options: null as null | {
+    onTranscript: (line: { speaker: 'user' | 'prospect'; text: string; timestamp: number }) => void;
+  },
   send: vi.fn(),
   finish: vi.fn(),
 }));
@@ -13,10 +15,14 @@ const summaryMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../services/deepgram.js', () => ({
-  createDeepgramClient: vi.fn((options) => {
+  createDeepgramClient: vi.fn(options => {
     deepgramMock.options = options;
     deepgramMock.send.mockImplementation(() => {
-      options.onTranscript({ speaker: 'user', text: 'We can run a pilot next week.', timestamp: Date.now() });
+      options.onTranscript({
+        speaker: 'user',
+        text: 'We can run a pilot next week.',
+        timestamp: Date.now(),
+      });
     });
     return { send: deepgramMock.send, finish: deepgramMock.finish };
   }),
@@ -34,7 +40,7 @@ import { initDb, callSessions, contacts, transcriptLines, callSummaries } from '
 import { NoOpProvider } from '../services/ai.js';
 import { registerSecurity } from '../services/security.js';
 
-async function buildApp(options: { auth?: boolean } = {}) {
+async function buildApp(options: { auth?: boolean; maxMessageBytes?: number } = {}) {
   const app = Fastify({ logger: false });
   if (options.auth) {
     await registerSecurity(app, {
@@ -57,13 +63,14 @@ async function buildApp(options: { auth?: boolean } = {}) {
     liveModel: 'claude-haiku-4-5-20251001',
     summaryModel: 'claude-sonnet-4-6',
     scoringFramework: 'MEDDIC',
+    maxMessageBytes: options.maxMessageBytes,
   });
   await app.ready();
   return { app, db };
 }
 
 function connectAndDrainConnected(address: string): Promise<WebSocket> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const ws = new WebSocket(address);
     ws.once('message', () => resolve(ws));
   });
@@ -84,12 +91,14 @@ describe('WebSocket route', () => {
     const listen = await app.listen({ port: 0 });
     address = `ws://localhost:${new URL(listen).port}/ws`;
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => {
+    await app.close();
+  });
 
   it('sends connected message on connect', async () => {
     const ws = new WebSocket(address);
-    const msg = await new Promise<string>((resolve) => {
-      ws.on('message', (d) => resolve(d.toString()));
+    const msg = await new Promise<string>(resolve => {
+      ws.on('message', d => resolve(d.toString()));
     });
     ws.close();
     expect(JSON.parse(msg).type).toBe('connected');
@@ -97,10 +106,14 @@ describe('WebSocket route', () => {
 
   it('handles start with prospect + stop', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'investor',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 100));
     ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
@@ -118,10 +131,14 @@ describe('WebSocket route', () => {
 
   it('is idempotent when stop and close race', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'investor',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 50));
     ws.send(JSON.stringify({ type: 'stop' }));
     ws.close(); // fire both in quick succession
@@ -139,10 +156,14 @@ describe('WebSocket route', () => {
       followUpDraft: 'Thanks for the call. I will send the pilot plan.',
     });
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'enterprise',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'enterprise',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 100));
     ws.send(Buffer.from([0x01, 0x02, 0x03]));
     await new Promise(r => setTimeout(r, 50));
@@ -164,5 +185,19 @@ describe('WebSocket route', () => {
     app = built.app;
     const res = await app.inject({ method: 'GET', url: '/ws' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('closes oversized websocket messages', async () => {
+    await app.close();
+    built = await buildApp({ maxMessageBytes: 8 });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+    const ws = await connectAndDrainConnected(address);
+    const closeCode = new Promise<number>(resolve => {
+      ws.once('close', code => resolve(code));
+    });
+    ws.send(Buffer.alloc(16));
+    await expect(closeCode).resolves.toBe(1009);
   });
 });

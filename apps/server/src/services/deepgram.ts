@@ -25,7 +25,7 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
   const { apiKey, model = 'nova-3', onTranscript, onError } = options;
 
   if (isPlaceholderKey(apiKey)) {
-    console.log('[SIGNAL] Deepgram key is placeholder — STT disabled');
+    console.info('[SIGNAL] Deepgram key is placeholder — STT disabled');
     return {
       send: () => {},
       finish: () => {},
@@ -42,7 +42,7 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
     smart_format: true,
   });
 
-  connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+  connection.on(LiveTranscriptionEvents.Transcript, data => {
     const alt = data.channel?.alternatives?.[0];
     if (!alt?.transcript?.trim()) return;
     if (data.is_final === false) return;
@@ -59,7 +59,7 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
   connection.on(LiveTranscriptionEvents.Error, onError);
 
   connection.on(LiveTranscriptionEvents.Close, () => {
-    console.log('[SIGNAL] Deepgram connection closed');
+    console.info('[SIGNAL] Deepgram connection closed');
   });
 
   return {

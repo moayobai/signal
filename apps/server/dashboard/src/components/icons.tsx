@@ -2,10 +2,14 @@
  * Tiny inline SVG icon set. Hand-tuned 16px stroke icons.
  */
 
-interface Props { size?: number; stroke?: number; }
+interface Props {
+  size?: number;
+  stroke?: number;
+}
 
 const base = (size = 16, stroke = 1.5) => ({
-  width: size, height: size,
+  width: size,
+  height: size,
   viewBox: '0 0 16 16',
   fill: 'none',
   stroke: 'currentColor',

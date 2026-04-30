@@ -11,10 +11,32 @@ import { generateScorecard } from '../services/scorecard.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
 import { postCallSummaryToSlack } from '../services/slack.js';
 import { findOrCreateContact, writeCallEngagement } from '../services/hubspot.js';
-import { contacts, callSessions, transcriptLines, signalFrames, callSummaries, transcriptEmbeddings, type DB } from '../services/db.js';
-import { embed, packFloat32, chunkTranscript, isPlaceholderVoyageKey } from '../services/embeddings.js';
+import {
+  contacts,
+  callSessions,
+  transcriptLines,
+  signalFrames,
+  callSummaries,
+  transcriptEmbeddings,
+  type DB,
+} from '../services/db.js';
+import {
+  embed,
+  packFloat32,
+  chunkTranscript,
+  isPlaceholderVoyageKey,
+} from '../services/embeddings.js';
 import type { AIProvider } from '../services/ai.js';
-import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine, CallType, CallFramework, FaceSignals } from '@signal/types';
+import type {
+  ClientMessage,
+  ServerMessage,
+  Prospect,
+  SignalFrame,
+  TranscriptLine,
+  CallType,
+  CallFramework,
+  FaceSignals,
+} from '@signal/types';
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
@@ -37,10 +59,11 @@ export interface WsRouteOptions {
   summaryModel: string;
   scoringFramework: CallFramework;
   publicBaseUrl?: string;
+  maxMessageBytes?: number;
 }
 
 export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): void {
-  app.get('/ws', { websocket: true }, (socket) => {
+  app.get('/ws', { websocket: true }, socket => {
     let session: CallSession | null = null;
     const sessionId = randomUUID();
     let contactId: string | null = null;
@@ -59,6 +82,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     const collectedTranscript: TranscriptLine[] = [];
     let stopPromise: Promise<void> | null = null;
     let callState: CallState = 'IDLE';
+    const maxMessageBytes = opts.maxMessageBytes ?? 1_048_576;
 
     function send(msg: ServerMessage): void {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
@@ -69,7 +93,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     const dg = createDeepgramClient({
       apiKey: opts.deepgramApiKey,
       model: opts.deepgramModel ?? 'nova-3',
-      onTranscript: (line) => {
+      onTranscript: line => {
         if (!session || callState !== 'ACTIVE') return;
         session.addLine(line);
         collectedTranscript.push(line);
@@ -78,9 +102,15 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           collectedTranscript.splice(0, collectedTranscript.length - MAX_TRANSCRIPT_LINES);
         }
         try {
-          opts.db.insert(transcriptLines).values({
-            sessionId, speaker: line.speaker, text: line.text, timestamp: line.timestamp,
-          }).run();
+          opts.db
+            .insert(transcriptLines)
+            .values({
+              sessionId,
+              speaker: line.speaker,
+              text: line.text,
+              timestamp: line.timestamp,
+            })
+            .run();
         } catch (err) {
           console.error('[SIGNAL] failed to persist transcript line:', err);
         }
@@ -91,7 +121,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           send({ type: 'state', overlayState: 'DANGER' });
         }
       },
-      onError: (err) => {
+      onError: err => {
         console.error('[SIGNAL] Deepgram error:', err);
         send({ type: 'error', message: 'STT error' });
       },
@@ -99,8 +129,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
     const hume: HumeHandle = createHumeClient({
       apiKey: opts.humeApiKey,
-      onFaceSignals: (signals) => { latestFaceSignals = signals; },
-      onError: (err) => console.error('[SIGNAL] Hume error:', err),
+      onFaceSignals: signals => {
+        latestFaceSignals = signals;
+      },
+      onError: err => console.error('[SIGNAL] Hume error:', err),
     });
 
     async function onStart(msg: Extract<ClientMessage, { type: 'start' }>): Promise<void> {
@@ -120,9 +152,16 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       const row = opts.db.select().from(contacts).where(eq(contacts.id, contactId)).get();
       previousOctamemId = row?.octamemId ?? null;
 
-      opts.db.insert(callSessions).values({
-        id: sessionId, contactId, platform, callType, startedAt,
-      }).run();
+      opts.db
+        .insert(callSessions)
+        .values({
+          id: sessionId,
+          contactId,
+          platform,
+          callType,
+          startedAt,
+        })
+        .run();
 
       octamemContext = await queryProspectContext({
         apiKey: opts.octamemApiKey,
@@ -148,8 +187,14 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           model: opts.liveModel,
           systemPrompt,
           userPrompt: buildUserPrompt(window),
-        }).catch(err => { console.error('[SIGNAL] runLiveNudge failed:', err); return null; })
-          .finally(() => { nudgeInFlight = false; });
+        })
+          .catch(err => {
+            console.error('[SIGNAL] runLiveNudge failed:', err);
+            return null;
+          })
+          .finally(() => {
+            nudgeInFlight = false;
+          });
         if (frame) {
           // Attach latest Hume face signals if available
           const enrichedFrame: SignalFrame = latestFaceSignals
@@ -177,7 +222,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     async function _onStop(): Promise<void> {
       if (callState === 'STOPPED') return;
       callState = 'STOPPING';
-      if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = null; }
+      if (claudeTimer) {
+        clearInterval(claudeTimer);
+        claudeTimer = null;
+      }
       dg.finish();
       hume.close();
 
@@ -189,13 +237,19 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       if (session && prospect && contactId) {
         const talk = computeTalkRatio(collectedTranscript);
         try {
-          opts.db.update(callSessions).set({
-            endedAt, durationMs, sentimentAvg,
-            userWords: talk.userWords,
-            prospectWords: talk.prospectWords,
-            talkRatio: talk.talkRatio,
-            longestMonologueMs: talk.longestMonologueMs,
-          }).where(eq(callSessions.id, sessionId)).run();
+          opts.db
+            .update(callSessions)
+            .set({
+              endedAt,
+              durationMs,
+              sentimentAvg,
+              userWords: talk.userWords,
+              prospectWords: talk.prospectWords,
+              talkRatio: talk.talkRatio,
+              longestMonologueMs: talk.longestMonologueMs,
+            })
+            .where(eq(callSessions.id, sessionId))
+            .run();
         } catch (err) {
           console.error('[SIGNAL] failed to update call session:', err);
         }
@@ -210,15 +264,18 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         if (summary) {
           const summaryRowId = randomUUID();
           try {
-            opts.db.insert(callSummaries).values({
-              id: summaryRowId,
-              sessionId,
-              winSignals: JSON.stringify(summary.winSignals),
-              objections: JSON.stringify(summary.objections),
-              decisions: JSON.stringify(summary.decisions),
-              followUpDraft: summary.followUpDraft,
-              createdAt: endedAt,
-            }).run();
+            opts.db
+              .insert(callSummaries)
+              .values({
+                id: summaryRowId,
+                sessionId,
+                winSignals: JSON.stringify(summary.winSignals),
+                objections: JSON.stringify(summary.objections),
+                decisions: JSON.stringify(summary.decisions),
+                followUpDraft: summary.followUpDraft,
+                createdAt: endedAt,
+              })
+              .run();
           } catch (err) {
             console.error('[SIGNAL] failed to persist summary:', err);
           }
@@ -231,11 +288,15 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
             framework: opts.scoringFramework,
             callType,
             transcript: collectedTranscript,
-          }).catch(err => { console.error('[SIGNAL] generateScorecard failed:', err); return null; });
+          }).catch(err => {
+            console.error('[SIGNAL] generateScorecard failed:', err);
+            return null;
+          });
 
           if (scorecard) {
             try {
-              opts.db.update(callSummaries)
+              opts.db
+                .update(callSummaries)
                 .set({ scorecard: JSON.stringify(scorecard) })
                 .where(eq(callSummaries.sessionId, sessionId))
                 .run();
@@ -249,13 +310,19 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
             const newMemId = await storeCallMemory({
               apiKey: opts.octamemApiKey,
               contact: { name: prospect.name, company: prospect.company },
-              callType, durationMs, sentimentAvg: sentimentAvg ?? 0,
-              summary, dangerMoments,
+              callType,
+              durationMs,
+              sentimentAvg: sentimentAvg ?? 0,
+              summary,
+              dangerMoments,
               previousOctamemId: previousOctamemId ?? undefined,
             });
             if (newMemId) {
-              opts.db.update(contacts).set({ octamemId: newMemId, updatedAt: endedAt })
-                .where(eq(contacts.id, contactId)).run();
+              opts.db
+                .update(contacts)
+                .set({ octamemId: newMemId, updatedAt: endedAt })
+                .where(eq(contacts.id, contactId))
+                .run();
             }
           } catch (err) {
             console.error('[SIGNAL] failed to store call memory:', err);
@@ -263,7 +330,11 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
           // HubSpot — ensure contact exists then log the call. Graceful no-op on placeholder / errors.
           try {
-            const existing = opts.db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+            const existing = opts.db
+              .select()
+              .from(contacts)
+              .where(eq(contacts.id, contactId))
+              .get();
             let hubspotContactId = existing?.hubspotId ?? null;
             if (!hubspotContactId) {
               const created = await findOrCreateContact({
@@ -273,8 +344,11 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
               if (created) {
                 hubspotContactId = created.hubspotId;
                 try {
-                  opts.db.update(contacts).set({ hubspotId: hubspotContactId, updatedAt: endedAt })
-                    .where(eq(contacts.id, contactId)).run();
+                  opts.db
+                    .update(contacts)
+                    .set({ hubspotId: hubspotContactId, updatedAt: endedAt })
+                    .where(eq(contacts.id, contactId))
+                    .run();
                 } catch (err) {
                   console.error('[SIGNAL] failed to persist hubspot id:', err);
                 }
@@ -320,16 +394,22 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           try {
             const chunks = chunkTranscript(collectedTranscript);
             if (chunks.length > 0) {
-              const vectors = await embed(chunks.map(c => c.text), opts.voyageApiKey);
+              const vectors = await embed(
+                chunks.map(c => c.text),
+                opts.voyageApiKey,
+              );
               if (vectors && vectors.length === chunks.length) {
                 for (let i = 0; i < chunks.length; i++) {
-                  opts.db.insert(transcriptEmbeddings).values({
-                    sessionId,
-                    chunkIndex: chunks[i].index,
-                    speaker: chunks[i].speaker,
-                    text: chunks[i].text,
-                    embedding: packFloat32(vectors[i]),
-                  }).run();
+                  opts.db
+                    .insert(transcriptEmbeddings)
+                    .values({
+                      sessionId,
+                      chunkIndex: chunks[i].index,
+                      speaker: chunks[i].speaker,
+                      text: chunks[i].text,
+                      embedding: packFloat32(vectors[i]),
+                    })
+                    .run();
                 }
               }
             }
@@ -341,8 +421,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       callState = 'STOPPED';
     }
 
-    socket.on('message', (rawData) => {
+    socket.on('message', rawData => {
       const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData as ArrayBuffer);
+      if (data.byteLength > maxMessageBytes) {
+        send({ type: 'error', message: 'Message too large' });
+        socket.close(1009, 'Message too large');
+        return;
+      }
       try {
         const msg = JSON.parse(data.toString()) as ClientMessage;
         if (msg.type === 'start') {
@@ -356,7 +441,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           onStop().catch(err => console.error('[SIGNAL] onStop failed:', err));
           return;
         }
-        if (msg.type === 'video_frame') { hume.sendFrame(msg.data); return; }
+        if (msg.type === 'video_frame') {
+          hume.sendFrame(msg.data);
+          return;
+        }
       } catch {
         // Binary = audio chunk → forward to Deepgram
         dg.send(data);
@@ -366,7 +454,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     socket.on('close', () => {
       onStop().catch(err => console.error('[SIGNAL] onStop (close) failed:', err));
     });
-    socket.on('error', (err) => {
+    socket.on('error', err => {
       console.error('[SIGNAL] WS socket error:', err);
       onStop().catch(e => console.error('[SIGNAL] onStop (error) failed:', e));
     });
@@ -376,21 +464,39 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 async function upsertContact(db: DB, prospect: Prospect): Promise<string> {
   const now = Date.now();
   const existing = prospect.company
-    ? db.select().from(contacts).where(and(eq(contacts.name, prospect.name), eq(contacts.company, prospect.company))).get()
-    : db.select().from(contacts).where(and(eq(contacts.name, prospect.name), isNull(contacts.company))).get();
+    ? db
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.name, prospect.name), eq(contacts.company, prospect.company)))
+        .get()
+    : db
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.name, prospect.name), isNull(contacts.company)))
+        .get();
   if (existing) {
-    db.update(contacts).set({
-      email: prospect.email ?? existing.email,
-      linkedinUrl: prospect.linkedinUrl ?? existing.linkedinUrl,
-      updatedAt: now,
-    }).where(eq(contacts.id, existing.id)).run();
+    db.update(contacts)
+      .set({
+        email: prospect.email ?? existing.email,
+        linkedinUrl: prospect.linkedinUrl ?? existing.linkedinUrl,
+        updatedAt: now,
+      })
+      .where(eq(contacts.id, existing.id))
+      .run();
     return existing.id;
   }
   const id = randomUUID();
-  db.insert(contacts).values({
-    id, name: prospect.name, email: prospect.email, linkedinUrl: prospect.linkedinUrl,
-    company: prospect.company, createdAt: now, updatedAt: now,
-  }).run();
+  db.insert(contacts)
+    .values({
+      id,
+      name: prospect.name,
+      email: prospect.email,
+      linkedinUrl: prospect.linkedinUrl,
+      company: prospect.company,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
   return id;
 }
 
@@ -446,13 +552,15 @@ function computeTalkRatio(lines: TranscriptLine[]): TalkRatioStats {
 }
 
 function persistFrame(db: DB, sessionId: string, frame: SignalFrame): void {
-  db.insert(signalFrames).values({
-    sessionId,
-    promptType: frame.prompt.type,
-    promptText: frame.prompt.text,
-    confidence: frame.prompt.confidence,
-    sentiment: frame.sentiment,
-    dangerFlag: frame.dangerFlag ? 1 : 0,
-    createdAt: Date.now(),
-  }).run();
+  db.insert(signalFrames)
+    .values({
+      sessionId,
+      promptType: frame.prompt.type,
+      promptText: frame.prompt.text,
+      confidence: frame.prompt.confidence,
+      sentiment: frame.sentiment,
+      dangerFlag: frame.dangerFlag ? 1 : 0,
+      createdAt: Date.now(),
+    })
+    .run();
 }

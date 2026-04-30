@@ -1,4 +1,5 @@
 # SIGNAL — Phase 2+3 Design Doc
+
 **Date:** 2026-04-14
 **Scope:** Full live pipeline — audio capture → Deepgram STT → Claude Haiku live prompts → overlay
 **Goal:** Replace mock fixture with real data. When keys are inserted, SIGNAL is live.
@@ -7,16 +8,16 @@
 
 ## Decisions
 
-| Decision | Choice | Reason |
-|---|---|---|
-| Deepgram connection | Server-side | No key exposure in extension; spec-aligned |
-| Audio format | `audio/webm;codecs=opus` via MediaRecorder | Native browser support, 250ms chunks, Deepgram-compatible |
-| Live AI model | `claude-haiku-4-5-20251001` | Fastest Claude, ~400ms TTFT, structured JSON reliable |
-| Claude trigger | 12s interval + ≥2 new transcript lines | Avoids redundant calls on silence |
-| Prompt caching | System prompt cached (company.md rarely changes) | ~4× cheaper per live call |
-| Backend host | localhost:8080 dev, Fly.io (lhr region) prod | Low latency EU; one-command deploy |
-| API keys | `.env.example` placeholders, real keys in `.env` | Full pipeline scaffolded, flip live on key insertion |
-| Server runtime | `tsx` (dev), `esbuild` bundle (prod) | Zero-config TS execution for dev; fast single-file build for prod |
+| Decision            | Choice                                           | Reason                                                            |
+| ------------------- | ------------------------------------------------ | ----------------------------------------------------------------- |
+| Deepgram connection | Server-side                                      | No key exposure in extension; spec-aligned                        |
+| Audio format        | `audio/webm;codecs=opus` via MediaRecorder       | Native browser support, 250ms chunks, Deepgram-compatible         |
+| Live AI model       | `claude-haiku-4-5-20251001`                      | Fastest Claude, ~400ms TTFT, structured JSON reliable             |
+| Claude trigger      | 12s interval + ≥2 new transcript lines           | Avoids redundant calls on silence                                 |
+| Prompt caching      | System prompt cached (company.md rarely changes) | ~4× cheaper per live call                                         |
+| Backend host        | localhost:8080 dev, Fly.io (lhr region) prod     | Low latency EU; one-command deploy                                |
+| API keys            | `.env.example` placeholders, real keys in `.env` | Full pipeline scaffolded, flip live on key insertion              |
+| Server runtime      | `tsx` (dev), `esbuild` bundle (prod)             | Zero-config TS execution for dev; fast single-file build for prod |
 
 ---
 
@@ -62,23 +63,25 @@ External APIs
 All messages typed in `packages/types/index.ts`.
 
 ### Extension → Server
+
 ```ts
 // JSON control
 type ClientMessage =
   | { type: 'start'; platform: 'meet' | 'zoom' | 'teams'; callType: CallType }
-  | { type: 'stop' }
+  | { type: 'stop' };
 
 // Binary audio: raw ArrayBuffer chunks (250ms of audio/webm)
 ```
 
 ### Server → Extension
+
 ```ts
 type ServerMessage =
   | { type: 'connected'; sessionId: string }
   | { type: 'transcript'; line: TranscriptLine }
   | { type: 'frame'; frame: SignalFrame }
   | { type: 'state'; overlayState: OverlayState }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string };
 ```
 
 ---
@@ -111,15 +114,16 @@ type ServerMessage =
 ## Server Implementation Details
 
 ### `routes/ws.ts`
+
 ```ts
 fastify.register(require('@fastify/websocket'));
 fastify.get('/ws', { websocket: true }, async (socket, req) => {
   const session = new CallSession();
   const dgClient = createDeepgramClient(socket, session);
 
-  socket.on('message', (data) => {
+  socket.on('message', data => {
     if (Buffer.isBuffer(data)) {
-      dgClient.send(data);           // pipe audio to Deepgram
+      dgClient.send(data); // pipe audio to Deepgram
     } else {
       const msg = JSON.parse(data.toString()) as ClientMessage;
       if (msg.type === 'stop') session.end();
@@ -134,6 +138,7 @@ fastify.get('/ws', { websocket: true }, async (socket, req) => {
 ```
 
 ### `services/session.ts`
+
 ```ts
 // Rolling window: keeps last 90s of TranscriptLine[]
 // Scheduler: setInterval(12000), fires Claude if:
@@ -146,6 +151,7 @@ fastify.get('/ws', { websocket: true }, async (socket, req) => {
 ```
 
 ### `services/claude.ts`
+
 ```ts
 // Uses @anthropic-ai/sdk
 // Model: claude-haiku-4-5-20251001
@@ -156,6 +162,7 @@ fastify.get('/ws', { websocket: true }, async (socket, req) => {
 ```
 
 ### `prompts/live.ts`
+
 ```ts
 // Loads knowledge/company.md from repo root
 // Builds system prompt with:
@@ -172,18 +179,19 @@ fastify.get('/ws', { websocket: true }, async (socket, req) => {
 
 No body language in Phase 2 (Phase 4). Danger triggers from transcript only:
 
-| Trigger | Condition | Prompt type |
-|---|---|---|
-| Silence | No transcript line for 30s | `SILENCE` |
-| Pricing | Line contains: price, cost, expensive, budget, afford | `WARN` |
-| Competitor | Line contains name from competitors list in company.md | `WARN` |
-| Recovery | 2+ new lines after a danger state | back to `LIVE` |
+| Trigger    | Condition                                              | Prompt type    |
+| ---------- | ------------------------------------------------------ | -------------- |
+| Silence    | No transcript line for 30s                             | `SILENCE`      |
+| Pricing    | Line contains: price, cost, expensive, budget, afford  | `WARN`         |
+| Competitor | Line contains name from competitors list in company.md | `WARN`         |
+| Recovery   | 2+ new lines after a danger state                      | back to `LIVE` |
 
 ---
 
 ## Extension Changes
 
 ### `background.ts` (full rewrite of stub)
+
 ```ts
 // State: wsocket, recorder, activeTabId
 // Messages handled:
@@ -194,6 +202,7 @@ No body language in Phase 2 (Phase 4). Danger triggers from transcript only:
 ```
 
 ### `content.tsx` (two additions)
+
 ```ts
 // 1. On mount: detect call (URL + video element)
 //    → chrome.runtime.sendMessage({ type: 'START_CAPTURE' })
@@ -201,6 +210,7 @@ No body language in Phase 2 (Phase 4). Danger triggers from transcript only:
 ```
 
 ### `Overlay.tsx` — no changes needed
+
 ### `wxt.config.ts` — add `tabCapture` permission
 
 ---
@@ -208,6 +218,7 @@ No body language in Phase 2 (Phase 4). Danger triggers from transcript only:
 ## Files Created / Modified
 
 ### New
+
 ```
 apps/server/src/index.ts              — Fastify bootstrap
 apps/server/src/routes/ws.ts          — WebSocket handler
@@ -223,6 +234,7 @@ knowledge/company.md                  — Company context template
 ```
 
 ### Modified
+
 ```
 apps/server/package.json              — add deps: fastify, ws, deepgram, anthropic, tsx, esbuild
 apps/extension/entrypoints/background.ts  — full audio capture + WS client
@@ -237,6 +249,7 @@ turbo.json                               — update server dev/build scripts
 ## Environment
 
 ### `apps/server/.env.example`
+
 ```
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 DEEPGRAM_API_KEY=your-deepgram-key-here
@@ -247,10 +260,12 @@ WS_URL=ws://localhost:8080
 ```
 
 ### `apps/extension` env
+
 WS_URL injected via `wxt.config.ts` vite define:
+
 ```ts
 define: {
-  __WS_URL__: JSON.stringify(process.env.WS_URL ?? 'ws://localhost:8080')
+  __WS_URL__: JSON.stringify(process.env.WS_URL ?? 'ws://localhost:8080');
 }
 ```
 
@@ -258,13 +273,13 @@ define: {
 
 ## Testing Strategy
 
-| Layer | Test | Approach |
-|---|---|---|
-| `session.ts` — rolling window | Unit: trim at 90s, newLines counter resets after Claude call | Vitest, fake timers |
-| `session.ts` — danger detection | Unit: keywords trigger correct prompt type, silence at 30s | Vitest, fake timers |
-| `claude.ts` — JSON parse | Unit: valid response parsed to SignalFrame, invalid response returns null | Vitest, mock SDK |
-| `routes/ws.ts` | Integration: mock Deepgram + mock Claude, assert server pushes correct messages | Vitest + mock WS client |
-| Audio capture | Manual: Chrome extension on meet.google.com, transcript visible in overlay | Manual |
+| Layer                           | Test                                                                            | Approach                |
+| ------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
+| `session.ts` — rolling window   | Unit: trim at 90s, newLines counter resets after Claude call                    | Vitest, fake timers     |
+| `session.ts` — danger detection | Unit: keywords trigger correct prompt type, silence at 30s                      | Vitest, fake timers     |
+| `claude.ts` — JSON parse        | Unit: valid response parsed to SignalFrame, invalid response returns null       | Vitest, mock SDK        |
+| `routes/ws.ts`                  | Integration: mock Deepgram + mock Claude, assert server pushes correct messages | Vitest + mock WS client |
+| Audio capture                   | Manual: Chrome extension on meet.google.com, transcript visible in overlay      | Manual                  |
 
 ---
 

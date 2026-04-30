@@ -15,6 +15,7 @@
 ## Task 1: Update `packages/types` — prospect in ClientMessage, summary in ServerMessage
 
 **Files:**
+
 - Modify: `packages/types/index.ts`
 
 **Step 1: Update `ClientMessage` start shape and add summary to `ServerMessage`**
@@ -64,11 +65,13 @@ git commit -m "feat(types): add Prospect + summary ServerMessage for Phase 4"
 ## Task 2: Install server dependencies
 
 **Files:**
+
 - Modify: `apps/server/package.json`
 
 **Step 1: Install runtime + dev deps**
 
 Run (from repo root):
+
 ```bash
 pnpm --filter server add drizzle-orm better-sqlite3 @fastify/static
 pnpm --filter server add -D @types/better-sqlite3 drizzle-kit
@@ -77,6 +80,7 @@ pnpm --filter server add -D @types/better-sqlite3 drizzle-kit
 **Step 2: Verify versions in `apps/server/package.json`**
 
 Expected additions:
+
 - `drizzle-orm` ^0.33+
 - `better-sqlite3` ^11+
 - `@fastify/static` ^7+ (compatible with Fastify 4)
@@ -94,6 +98,7 @@ git commit -m "chore(server): add drizzle-orm, better-sqlite3, @fastify/static"
 ## Task 3: DB layer — `services/db.ts` (Drizzle schema + init)
 
 **Files:**
+
 - Create: `apps/server/src/services/db.ts`
 - Test: `apps/server/src/services/db.test.ts`
 
@@ -113,13 +118,15 @@ describe('db', () => {
 
   it('creates contacts table and upserts a contact', () => {
     const now = Date.now();
-    db.insert(contacts).values({
-      id: 'c1',
-      name: 'James',
-      company: 'Acme',
-      createdAt: now,
-      updatedAt: now,
-    }).run();
+    db.insert(contacts)
+      .values({
+        id: 'c1',
+        name: 'James',
+        company: 'Acme',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
 
     const rows = db.select().from(contacts).all();
     expect(rows).toHaveLength(1);
@@ -129,13 +136,15 @@ describe('db', () => {
   it('creates call_sessions table with FK to contacts', () => {
     const now = Date.now();
     db.insert(contacts).values({ id: 'c1', name: 'J', createdAt: now, updatedAt: now }).run();
-    db.insert(callSessions).values({
-      id: 's1',
-      contactId: 'c1',
-      platform: 'meet',
-      callType: 'investor',
-      startedAt: now,
-    }).run();
+    db.insert(callSessions)
+      .values({
+        id: 's1',
+        contactId: 'c1',
+        platform: 'meet',
+        callType: 'investor',
+        startedAt: now,
+      })
+      .run();
     const rows = db.select().from(callSessions).all();
     expect(rows[0].contactId).toBe('c1');
   });
@@ -265,6 +274,7 @@ git commit -m "feat(server): add Drizzle ORM schema and initDb"
 ## Task 4: AI provider abstraction — `services/ai.ts` + refactor `claude.ts`
 
 **Files:**
+
 - Create: `apps/server/src/services/ai.ts`
 - Create: `apps/server/src/services/ai.test.ts`
 - Modify: `apps/server/src/services/claude.ts`
@@ -288,19 +298,35 @@ import { createAIProvider, ClaudeProvider, OpenRouterProvider, NoOpProvider } fr
 
 describe('createAIProvider', () => {
   it('returns NoOpProvider when ANTHROPIC_API_KEY is placeholder', () => {
-    const p = createAIProvider({ provider: 'claude', anthropicApiKey: 'sk-ant-your-key-here', openrouterApiKey: '' });
+    const p = createAIProvider({
+      provider: 'claude',
+      anthropicApiKey: 'sk-ant-your-key-here',
+      openrouterApiKey: '',
+    });
     expect(p).toBeInstanceOf(NoOpProvider);
   });
   it('returns ClaudeProvider for real claude key', () => {
-    const p = createAIProvider({ provider: 'claude', anthropicApiKey: 'sk-ant-api03-real', openrouterApiKey: '' });
+    const p = createAIProvider({
+      provider: 'claude',
+      anthropicApiKey: 'sk-ant-api03-real',
+      openrouterApiKey: '',
+    });
     expect(p).toBeInstanceOf(ClaudeProvider);
   });
   it('returns OpenRouterProvider when provider=openrouter with real key', () => {
-    const p = createAIProvider({ provider: 'openrouter', anthropicApiKey: '', openrouterApiKey: 'sk-or-real' });
+    const p = createAIProvider({
+      provider: 'openrouter',
+      anthropicApiKey: '',
+      openrouterApiKey: 'sk-or-real',
+    });
     expect(p).toBeInstanceOf(OpenRouterProvider);
   });
   it('returns NoOpProvider when openrouter key is placeholder', () => {
-    const p = createAIProvider({ provider: 'openrouter', anthropicApiKey: '', openrouterApiKey: 'sk-or-your-key-here' });
+    const p = createAIProvider({
+      provider: 'openrouter',
+      anthropicApiKey: '',
+      openrouterApiKey: 'sk-or-your-key-here',
+    });
     expect(p).toBeInstanceOf(NoOpProvider);
   });
 });
@@ -308,7 +334,12 @@ describe('createAIProvider', () => {
 describe('NoOpProvider', () => {
   it('returns null from complete()', async () => {
     const p = new NoOpProvider();
-    const result = await p.complete({ model: 'x', systemPrompt: 's', userPrompt: 'u', maxTokens: 100 });
+    const result = await p.complete({
+      model: 'x',
+      systemPrompt: 's',
+      userPrompt: 'u',
+      maxTokens: 100,
+    });
     expect(result).toBeNull();
   });
 });
@@ -316,7 +347,13 @@ describe('NoOpProvider', () => {
 describe('ClaudeProvider.complete', () => {
   it('calls Anthropic SDK and returns text', async () => {
     const p = new ClaudeProvider('sk-ant-api03-real');
-    const result = await p.complete({ model: 'claude-haiku-4-5-20251001', systemPrompt: 's', userPrompt: 'u', maxTokens: 100, cache: true });
+    const result = await p.complete({
+      model: 'claude-haiku-4-5-20251001',
+      systemPrompt: 's',
+      userPrompt: 'u',
+      maxTokens: 100,
+      cache: true,
+    });
     expect(result).toBe('hello');
   });
 });
@@ -329,7 +366,12 @@ describe('OpenRouterProvider.complete', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const p = new OpenRouterProvider('sk-or-real');
-    const result = await p.complete({ model: 'anthropic/claude-haiku', systemPrompt: 's', userPrompt: 'u', maxTokens: 100 });
+    const result = await p.complete({
+      model: 'anthropic/claude-haiku',
+      systemPrompt: 's',
+      userPrompt: 'u',
+      maxTokens: 100,
+    });
     expect(result).toBe('howdy');
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, opts] = fetchMock.mock.calls[0];
@@ -340,7 +382,12 @@ describe('OpenRouterProvider.complete', () => {
   it('returns null on non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     const p = new OpenRouterProvider('sk-or-real');
-    const result = await p.complete({ model: 'x', systemPrompt: 's', userPrompt: 'u', maxTokens: 100 });
+    const result = await p.complete({
+      model: 'x',
+      systemPrompt: 's',
+      userPrompt: 'u',
+      maxTokens: 100,
+    });
     expect(result).toBeNull();
     vi.unstubAllGlobals();
   });
@@ -377,12 +424,16 @@ function isPlaceholder(key: string): boolean {
 }
 
 export class NoOpProvider implements AIProvider {
-  async complete(): Promise<string | null> { return null; }
+  async complete(): Promise<string | null> {
+    return null;
+  }
 }
 
 export class ClaudeProvider implements AIProvider {
   private client: Anthropic;
-  constructor(apiKey: string) { this.client = new Anthropic({ apiKey }); }
+  constructor(apiKey: string) {
+    this.client = new Anthropic({ apiKey });
+  }
   async complete(opts: AICompleteOpts): Promise<string | null> {
     try {
       const res = await this.client.messages.create({
@@ -409,7 +460,7 @@ export class OpenRouterProvider implements AIProvider {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -422,7 +473,7 @@ export class OpenRouterProvider implements AIProvider {
         }),
       });
       if (!res.ok) return null;
-      const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       return data.choices?.[0]?.message?.content ?? null;
     } catch (err) {
       console.error('[SIGNAL] OpenRouter call failed:', err);
@@ -502,7 +553,13 @@ import { parseSignalFrame, runLiveNudge } from './claude.js';
 import { NoOpProvider } from './ai.js';
 
 const VALID_FRAME = {
-  prompt: { type: 'ASK', text: 'Ask about timeline', confidence: 0.85, isNudge: false, timestamp: 1234567890 },
+  prompt: {
+    type: 'ASK',
+    text: 'Ask about timeline',
+    confidence: 0.85,
+    isNudge: false,
+    timestamp: 1234567890,
+  },
   bodyLang: { eyeContact: 'direct', posture: 'neutral', microExpressions: 'engaged' },
   sentiment: 72,
   dangerFlag: false,
@@ -558,10 +615,12 @@ git commit -m "feat(server): AIProvider abstraction (Claude + OpenRouter)"
 ## Task 5: OctaMem service — `services/octamem.ts`
 
 **Files:**
+
 - Create: `apps/server/src/services/octamem.ts`
 - Create: `apps/server/src/services/octamem.test.ts`
 
 **Note on API shape:** OctaMem is a natural-language memory store. The assumed REST shape (based on the MCP tool contract — `octamem_add(content, previousContext?)` and `octamem_query(query, previousContext?)`) is:
+
 - `POST {BASE}/v1/add` — `{ content: string, previousContext?: string }` → `{ id: string }`
 - `POST {BASE}/v1/query` — `{ query: string, previousContext?: string }` → `{ result: string }`
 - Auth: `Authorization: Bearer {OCTAMEM_API_KEY}`
@@ -579,16 +638,23 @@ describe('octamem', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('queryProspectContext returns null when key is placeholder', async () => {
-    const res = await queryProspectContext({ apiKey: 'your-octamem-key-here', prospect: { name: 'J' } });
+    const res = await queryProspectContext({
+      apiKey: 'your-octamem-key-here',
+      prospect: { name: 'J' },
+    });
     expect(res).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it('queryProspectContext returns result string on success', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true, json: async () => ({ result: 'Last spoke 2026-03-10' }),
+      ok: true,
+      json: async () => ({ result: 'Last spoke 2026-03-10' }),
     });
-    const res = await queryProspectContext({ apiKey: 'real-key', prospect: { name: 'James', company: 'Acme' } });
+    const res = await queryProspectContext({
+      apiKey: 'real-key',
+      prospect: { name: 'James', company: 'Acme' },
+    });
     expect(res).toBe('Last spoke 2026-03-10');
   });
 
@@ -601,7 +667,10 @@ describe('octamem', () => {
   it('storeCallMemory returns null when key is placeholder', async () => {
     const res = await storeCallMemory({
       apiKey: 'your-octamem-key-here',
-      contact: { name: 'J' }, callType: 'investor', durationMs: 0, sentimentAvg: 0,
+      contact: { name: 'J' },
+      callType: 'investor',
+      durationMs: 0,
+      sentimentAvg: 0,
       summary: { winSignals: [], objections: [], decisions: [], followUpDraft: '' },
       dangerMoments: [],
     });
@@ -610,7 +679,8 @@ describe('octamem', () => {
 
   it('storeCallMemory posts formatted memory and returns id', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true, json: async () => ({ id: 'mem_123' }),
+      ok: true,
+      json: async () => ({ id: 'mem_123' }),
     });
     const res = await storeCallMemory({
       apiKey: 'real-key',
@@ -618,12 +688,19 @@ describe('octamem', () => {
       callType: 'investor',
       durationMs: 1800000,
       sentimentAvg: 72,
-      summary: { winSignals: ['Asked about timing'], objections: ['Burn rate'], decisions: ['Send deck'], followUpDraft: 'James, great...' },
+      summary: {
+        winSignals: ['Asked about timing'],
+        objections: ['Burn rate'],
+        decisions: ['Send deck'],
+        followUpDraft: 'James, great...',
+      },
       dangerMoments: [{ reason: 'pricing objection', timestamp: 1700000000000 }],
       previousOctamemId: 'mem_prev',
     });
     expect(res).toBe('mem_123');
-    const body = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string);
+    const body = JSON.parse(
+      (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string,
+    );
     expect(body.content).toContain('James');
     expect(body.content).toContain('investor');
     expect(body.previousContext).toBe('mem_prev');
@@ -649,7 +726,9 @@ function isPlaceholder(key: string): boolean {
   return PLACEHOLDER_PREFIXES.some(p => key.startsWith(p));
 }
 
-function baseUrl(): string { return process.env.OCTAMEM_BASE_URL ?? DEFAULT_BASE; }
+function baseUrl(): string {
+  return process.env.OCTAMEM_BASE_URL ?? DEFAULT_BASE;
+}
 
 export interface QueryOpts {
   apiKey: string;
@@ -663,11 +742,11 @@ export async function queryProspectContext(opts: QueryOpts): Promise<string | nu
   try {
     const res = await fetch(`${baseUrl()}/v1/query`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, previousContext: opts.previousOctamemId }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { result?: string };
+    const data = (await res.json()) as { result?: string };
     return data.result ?? null;
   } catch (err) {
     console.error('[SIGNAL] OctaMem query failed:', err);
@@ -701,7 +780,10 @@ function formatMemory(o: StoreOpts): string {
     `Follow-up: "${summary.followUpDraft}"`,
   ];
   if (dangerMoments.length > 0) {
-    lines.push('', `Danger moments: ${dangerMoments.map(d => `${d.reason}@${d.timestamp}`).join('; ')}`);
+    lines.push(
+      '',
+      `Danger moments: ${dangerMoments.map(d => `${d.reason}@${d.timestamp}`).join('; ')}`,
+    );
   }
   return lines.join('\n');
 }
@@ -711,11 +793,14 @@ export async function storeCallMemory(opts: StoreOpts): Promise<string | null> {
   try {
     const res = await fetch(`${baseUrl()}/v1/add`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: formatMemory(opts), previousContext: opts.previousOctamemId }),
+      headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: formatMemory(opts),
+        previousContext: opts.previousOctamemId,
+      }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { id?: string };
+    const data = (await res.json()) as { id?: string };
     return data.id ?? null;
   } catch (err) {
     console.error('[SIGNAL] OctaMem store failed:', err);
@@ -741,6 +826,7 @@ git commit -m "feat(server): OctaMem query + store service"
 ## Task 6: Summary service — `services/summary.ts`
 
 **Files:**
+
 - Create: `apps/server/src/services/summary.ts`
 - Create: `apps/server/src/services/summary.test.ts`
 
@@ -767,7 +853,9 @@ describe('generateSummary', () => {
   it('parses valid JSON into PostCallSummary', async () => {
     const ai = { complete: async () => VALID_JSON };
     const res = await generateSummary({
-      ai, model: 'claude-sonnet-4-6', callType: 'investor',
+      ai,
+      model: 'claude-sonnet-4-6',
+      callType: 'investor',
       transcript: [{ speaker: 'user', text: 'Hello', timestamp: 1 }],
     });
     expect(res?.winSignals).toEqual(['Asked about Series A']);
@@ -833,7 +921,8 @@ function parseSummary(text: string): PostCallSummary | null {
       !Array.isArray(obj.objections) ||
       !Array.isArray(obj.decisions) ||
       typeof obj.followUpDraft !== 'string'
-    ) return null;
+    )
+      return null;
     return obj as PostCallSummary;
   } catch {
     return null;
@@ -870,6 +959,7 @@ git commit -m "feat(server): post-call summary generation service"
 ## Task 7: Update `prompts/live.ts` — inject OctaMem context
 
 **Files:**
+
 - Modify: `apps/server/src/prompts/live.ts`
 
 **Step 1: Update `buildSystemPrompt` signature**
@@ -937,6 +1027,7 @@ git commit -m "feat(server): inject OctaMem prior-context into system prompt"
 ## Task 8: Update `routes/ws.ts` — prospect, persistence, summary on stop
 
 **Files:**
+
 - Modify: `apps/server/src/routes/ws.ts`
 - Modify: `apps/server/src/routes/ws.test.ts`
 
@@ -953,9 +1044,22 @@ import { runLiveNudge } from '../services/claude.js';
 import { buildSystemPrompt, buildUserPrompt } from '../prompts/live.js';
 import { generateSummary } from '../services/summary.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
-import { contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB } from '../services/db.js';
+import {
+  contacts,
+  callSessions,
+  transcriptLines,
+  signalFrames,
+  callSummaries,
+  type DB,
+} from '../services/db.js';
 import type { AIProvider } from '../services/ai.js';
-import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLine } from '@signal/types';
+import type {
+  ClientMessage,
+  ServerMessage,
+  Prospect,
+  SignalFrame,
+  TranscriptLine,
+} from '@signal/types';
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
@@ -970,7 +1074,7 @@ export interface WsRouteOptions {
 }
 
 export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): void {
-  app.get('/ws', { websocket: true }, (socket) => {
+  app.get('/ws', { websocket: true }, socket => {
     // Per-connection state
     let session: CallSession | null = null;
     let sessionId = randomUUID();
@@ -997,13 +1101,19 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
     const dg = createDeepgramClient({
       apiKey: opts.deepgramApiKey,
-      onTranscript: (line) => {
+      onTranscript: line => {
         if (!session) return;
         session.addLine(line);
         collectedTranscript.push(line);
-        opts.db.insert(transcriptLines).values({
-          sessionId, speaker: line.speaker, text: line.text, timestamp: line.timestamp,
-        }).run();
+        opts.db
+          .insert(transcriptLines)
+          .values({
+            sessionId,
+            speaker: line.speaker,
+            text: line.text,
+            timestamp: line.timestamp,
+          })
+          .run();
         send({ type: 'transcript', line });
         const danger = session.detectKeyword(line.text);
         if (danger) {
@@ -1011,7 +1121,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           send({ type: 'state', overlayState: 'DANGER' });
         }
       },
-      onError: (err) => {
+      onError: err => {
         console.error('[SIGNAL] Deepgram error:', err);
         send({ type: 'error', message: 'STT error' });
       },
@@ -1032,9 +1142,16 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       previousOctamemId = row?.octamemId ?? null;
 
       // Create call_session row
-      opts.db.insert(callSessions).values({
-        id: sessionId, contactId, platform, callType, startedAt,
-      }).run();
+      opts.db
+        .insert(callSessions)
+        .values({
+          id: sessionId,
+          contactId,
+          platform,
+          callType,
+          startedAt,
+        })
+        .run();
 
       // Query OctaMem for prior context (non-blocking for send)
       octamemContext = await queryProspectContext({
@@ -1071,16 +1188,25 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     async function onStop(): Promise<void> {
       if (ended) return;
       ended = true;
-      if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = null; }
+      if (claudeTimer) {
+        clearInterval(claudeTimer);
+        claudeTimer = null;
+      }
       dg.finish();
 
       const endedAt = Date.now();
       const durationMs = endedAt - startedAt;
       const sentimentAvg = sentimentCount > 0 ? sentimentSum / sentimentCount : 0;
 
-      opts.db.update(callSessions).set({
-        endedAt, durationMs, sentimentAvg,
-      }).where(eq(callSessions.id, sessionId)).run();
+      opts.db
+        .update(callSessions)
+        .set({
+          endedAt,
+          durationMs,
+          sentimentAvg,
+        })
+        .where(eq(callSessions.id, sessionId))
+        .run();
 
       if (!session || !prospect || !contactId) return;
 
@@ -1092,26 +1218,35 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       });
 
       if (summary) {
-        opts.db.insert(callSummaries).values({
-          id: randomUUID(),
-          sessionId,
-          winSignals: JSON.stringify(summary.winSignals),
-          objections: JSON.stringify(summary.objections),
-          decisions: JSON.stringify(summary.decisions),
-          followUpDraft: summary.followUpDraft,
-          createdAt: endedAt,
-        }).run();
+        opts.db
+          .insert(callSummaries)
+          .values({
+            id: randomUUID(),
+            sessionId,
+            winSignals: JSON.stringify(summary.winSignals),
+            objections: JSON.stringify(summary.objections),
+            decisions: JSON.stringify(summary.decisions),
+            followUpDraft: summary.followUpDraft,
+            createdAt: endedAt,
+          })
+          .run();
 
         const newMemId = await storeCallMemory({
           apiKey: opts.octamemApiKey,
           contact: { name: prospect.name, company: prospect.company, role: undefined },
-          callType, durationMs, sentimentAvg,
-          summary, dangerMoments,
+          callType,
+          durationMs,
+          sentimentAvg,
+          summary,
+          dangerMoments,
           previousOctamemId: previousOctamemId ?? undefined,
         });
         if (newMemId) {
-          opts.db.update(contacts).set({ octamemId: newMemId, updatedAt: endedAt })
-            .where(eq(contacts.id, contactId)).run();
+          opts.db
+            .update(contacts)
+            .set({ octamemId: newMemId, updatedAt: endedAt })
+            .where(eq(contacts.id, contactId))
+            .run();
         }
 
         send({ type: 'summary', summary });
@@ -1119,19 +1254,27 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       }
     }
 
-    socket.on('message', (rawData) => {
+    socket.on('message', rawData => {
       const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData as ArrayBuffer);
       try {
         const msg = JSON.parse(data.toString()) as ClientMessage;
-        if (msg.type === 'start') { void onStart(msg); return; }
-        if (msg.type === 'stop') { void onStop(); return; }
+        if (msg.type === 'start') {
+          void onStart(msg);
+          return;
+        }
+        if (msg.type === 'stop') {
+          void onStop();
+          return;
+        }
       } catch {
         dg.send(data);
       }
     });
 
-    socket.on('close', () => { void onStop(); });
-    socket.on('error', (err) => {
+    socket.on('close', () => {
+      void onStop();
+    });
+    socket.on('error', err => {
       console.error('[SIGNAL] WS socket error:', err);
       void onStop();
     });
@@ -1140,37 +1283,57 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
 async function upsertContact(db: DB, prospect: Prospect): Promise<string> {
   const now = Date.now();
-  const existing = db.select().from(contacts).where(and(
-    eq(contacts.name, prospect.name),
-    prospect.company ? eq(contacts.company, prospect.company) : eq(contacts.name, prospect.name),
-  )).get();
+  const existing = db
+    .select()
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.name, prospect.name),
+        prospect.company
+          ? eq(contacts.company, prospect.company)
+          : eq(contacts.name, prospect.name),
+      ),
+    )
+    .get();
   if (existing) {
-    db.update(contacts).set({
-      email: prospect.email ?? existing.email,
-      linkedinUrl: prospect.linkedinUrl ?? existing.linkedinUrl,
-      company: prospect.company ?? existing.company,
-      updatedAt: now,
-    }).where(eq(contacts.id, existing.id)).run();
+    db.update(contacts)
+      .set({
+        email: prospect.email ?? existing.email,
+        linkedinUrl: prospect.linkedinUrl ?? existing.linkedinUrl,
+        company: prospect.company ?? existing.company,
+        updatedAt: now,
+      })
+      .where(eq(contacts.id, existing.id))
+      .run();
     return existing.id;
   }
   const id = randomUUID();
-  db.insert(contacts).values({
-    id, name: prospect.name, email: prospect.email, linkedinUrl: prospect.linkedinUrl,
-    company: prospect.company, createdAt: now, updatedAt: now,
-  }).run();
+  db.insert(contacts)
+    .values({
+      id,
+      name: prospect.name,
+      email: prospect.email,
+      linkedinUrl: prospect.linkedinUrl,
+      company: prospect.company,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
   return id;
 }
 
 function persistFrame(db: DB, sessionId: string, frame: SignalFrame): void {
-  db.insert(signalFrames).values({
-    sessionId,
-    promptType: frame.prompt.type,
-    promptText: frame.prompt.text,
-    confidence: frame.prompt.confidence,
-    sentiment: frame.sentiment,
-    dangerFlag: frame.dangerFlag ? 1 : 0,
-    createdAt: Date.now(),
-  }).run();
+  db.insert(signalFrames)
+    .values({
+      sessionId,
+      promptType: frame.prompt.type,
+      promptText: frame.prompt.text,
+      confidence: frame.prompt.confidence,
+      sentiment: frame.sentiment,
+      dangerFlag: frame.dangerFlag ? 1 : 0,
+      createdAt: Date.now(),
+    })
+    .run();
 }
 ```
 
@@ -1216,7 +1379,7 @@ async function buildApp() {
 }
 
 function connectAndDrainConnected(address: string): Promise<WebSocket> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const ws = new WebSocket(address);
     ws.once('message', () => resolve(ws));
   });
@@ -1231,12 +1394,14 @@ describe('WebSocket route', () => {
     const listen = await app.listen({ port: 0 });
     address = `ws://localhost:${new URL(listen).port}/ws`;
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => {
+    await app.close();
+  });
 
   it('sends connected message on connect', async () => {
     const ws = new WebSocket(address);
-    const msg = await new Promise<string>((resolve) => {
-      ws.on('message', (d) => resolve(d.toString()));
+    const msg = await new Promise<string>(resolve => {
+      ws.on('message', d => resolve(d.toString()));
     });
     ws.close();
     expect(JSON.parse(msg).type).toBe('connected');
@@ -1244,10 +1409,14 @@ describe('WebSocket route', () => {
 
   it('handles start with prospect + stop', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'investor',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 100));
     ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
@@ -1282,6 +1451,7 @@ git commit -m "feat(server): persist calls, generate summary, push OctaMem on st
 ## Task 9: REST API — `routes/api.ts`
 
 **Files:**
+
 - Create: `apps/server/src/routes/api.ts`
 - Create: `apps/server/src/routes/api.test.ts`
 
@@ -1314,7 +1484,8 @@ describe('REST API', () => {
   it('POST /api/contacts creates a contact', async () => {
     const { app } = await buildApp();
     const res = await app.inject({
-      method: 'POST', url: '/api/contacts',
+      method: 'POST',
+      url: '/api/contacts',
       payload: { name: 'James', company: 'Acme' },
     });
     expect(res.statusCode).toBe(201);
@@ -1344,7 +1515,8 @@ describe('REST API', () => {
     const now = Date.now();
     db.insert(contacts).values({ id: 'c1', name: 'James', createdAt: now, updatedAt: now }).run();
     const res = await app.inject({
-      method: 'PUT', url: '/api/contacts/c1',
+      method: 'PUT',
+      url: '/api/contacts/c1',
       payload: { company: 'Acme Updated', notes: 'Great contact' },
     });
     expect(res.statusCode).toBe(200);
@@ -1375,10 +1547,17 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { desc, eq, sql } from 'drizzle-orm';
 import {
-  contacts, callSessions, transcriptLines, signalFrames, callSummaries, type DB,
+  contacts,
+  callSessions,
+  transcriptLines,
+  signalFrames,
+  callSummaries,
+  type DB,
 } from '../services/db.js';
 
-export interface ApiRouteOptions { db: DB; }
+export interface ApiRouteOptions {
+  db: DB;
+}
 
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
   const { db } = opts;
@@ -1391,8 +1570,17 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     if (!body.name) return reply.code(400).send({ error: 'name required' });
     const now = Date.now();
     const id = randomUUID();
-    const row = { id, name: body.name, email: body.email, linkedinUrl: body.linkedinUrl,
-      company: body.company, role: body.role, notes: body.notes, createdAt: now, updatedAt: now };
+    const row = {
+      id,
+      name: body.name,
+      email: body.email,
+      linkedinUrl: body.linkedinUrl,
+      company: body.company,
+      role: body.role,
+      notes: body.notes,
+      createdAt: now,
+      updatedAt: now,
+    };
     db.insert(contacts).values(row).run();
     return reply.code(201).send(row);
   });
@@ -1421,7 +1609,9 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   });
 
   // Calls
-  app.get('/api/calls', async () => db.select().from(callSessions).orderBy(desc(callSessions.startedAt)).all());
+  app.get('/api/calls', async () =>
+    db.select().from(callSessions).orderBy(desc(callSessions.startedAt)).all(),
+  );
 
   app.get('/api/calls/:id', async (req, reply) => {
     const id = (req.params as { id: string }).id;
@@ -1430,12 +1620,12 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     return row;
   });
 
-  app.get('/api/calls/:id/transcript', async (req) => {
+  app.get('/api/calls/:id/transcript', async req => {
     const id = (req.params as { id: string }).id;
     return db.select().from(transcriptLines).where(eq(transcriptLines.sessionId, id)).all();
   });
 
-  app.get('/api/calls/:id/frames', async (req) => {
+  app.get('/api/calls/:id/frames', async req => {
     const id = (req.params as { id: string }).id;
     return db.select().from(signalFrames).where(eq(signalFrames.sessionId, id)).all();
   });
@@ -1454,20 +1644,28 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   // Analytics
   app.get('/api/analytics/sentiment', async () => {
-    const rows = db.select({
-      week: sql<string>`strftime('%Y-%W', started_at / 1000, 'unixepoch')`,
-      avg: sql<number>`AVG(sentiment_avg)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(callSessions).where(sql`sentiment_avg IS NOT NULL`)
-      .groupBy(sql`strftime('%Y-%W', started_at / 1000, 'unixepoch')`).all();
+    const rows = db
+      .select({
+        week: sql<string>`strftime('%Y-%W', started_at / 1000, 'unixepoch')`,
+        avg: sql<number>`AVG(sentiment_avg)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(callSessions)
+      .where(sql`sentiment_avg IS NOT NULL`)
+      .groupBy(sql`strftime('%Y-%W', started_at / 1000, 'unixepoch')`)
+      .all();
     return rows;
   });
 
   app.get('/api/analytics/prompt-types', async () => {
-    return db.select({
-      promptType: signalFrames.promptType,
-      count: sql<number>`COUNT(*)`,
-    }).from(signalFrames).groupBy(signalFrames.promptType).all();
+    return db
+      .select({
+        promptType: signalFrames.promptType,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(signalFrames)
+      .groupBy(signalFrames.promptType)
+      .all();
   });
 
   app.get('/api/analytics/objections', async () => {
@@ -1477,7 +1675,8 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
       const list = JSON.parse(r.objections) as string[];
       for (const o of list) counts.set(o, (counts.get(o) ?? 0) + 1);
     }
-    return [...counts.entries()].map(([objection, count]) => ({ objection, count }))
+    return [...counts.entries()]
+      .map(([objection, count]) => ({ objection, count }))
       .sort((a, b) => b.count - a.count);
   });
 }
@@ -1500,6 +1699,7 @@ git commit -m "feat(server): REST API for contacts, calls, analytics"
 ## Task 10: Update `index.ts` — DB init, static serving, env validation, API route
 
 **Files:**
+
 - Modify: `apps/server/src/index.ts`
 - Create: `apps/server/.env.example`
 
@@ -1548,7 +1748,8 @@ await app.register(fastifyStatic, { root: publicDir, prefix: '/dashboard/' });
 app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
 registerWsRoute(app, {
-  db, ai,
+  db,
+  ai,
   deepgramApiKey: DEEPGRAM_API_KEY,
   octamemApiKey: OCTAMEM_API_KEY,
   liveModel: LIVE_MODEL,
@@ -1565,8 +1766,10 @@ try {
   if (AI_PROVIDER === 'openrouter' && OPENROUTER_API_KEY.startsWith('sk-or-your-key')) {
     app.log.warn('[SIGNAL] OPENROUTER_API_KEY is placeholder — AI disabled');
   }
-  if (DEEPGRAM_API_KEY.startsWith('your-deepgram')) app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
-  if (OCTAMEM_API_KEY.startsWith('your-octamem')) app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
+  if (DEEPGRAM_API_KEY.startsWith('your-deepgram'))
+    app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
+  if (OCTAMEM_API_KEY.startsWith('your-octamem'))
+    app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
 } catch (err) {
   app.log.error(err);
   process.exit(1);
@@ -1628,6 +1831,7 @@ git commit -m "feat(server): wire DB, AI provider, static dashboard, API routes 
 ## Task 11: Dashboard — Vite + React SPA
 
 **Files:**
+
 - Create: `apps/server/dashboard/package.json`
 - Create: `apps/server/dashboard/vite.config.ts`
 - Create: `apps/server/dashboard/tsconfig.json`
@@ -1749,7 +1953,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <App />
       </BrowserRouter>
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 ```
 
@@ -1767,7 +1971,9 @@ export default function App() {
     <div className="app">
       <nav className="sidebar">
         <h1>SIGNAL</h1>
-        <NavLink to="/" end>Home</NavLink>
+        <NavLink to="/" end>
+          Home
+        </NavLink>
         <NavLink to="/contacts">Contacts</NavLink>
       </nav>
       <main className="content">
@@ -1789,23 +1995,48 @@ export default function App() {
 const BASE = '/api';
 
 export interface Contact {
-  id: string; name: string; email?: string; linkedinUrl?: string;
-  company?: string; role?: string; notes?: string; octamemId?: string;
-  createdAt: number; updatedAt: number;
+  id: string;
+  name: string;
+  email?: string;
+  linkedinUrl?: string;
+  company?: string;
+  role?: string;
+  notes?: string;
+  octamemId?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 export interface CallSession {
-  id: string; contactId: string | null; platform: string; callType: string;
-  startedAt: number; endedAt: number | null; durationMs: number | null;
+  id: string;
+  contactId: string | null;
+  platform: string;
+  callType: string;
+  startedAt: number;
+  endedAt: number | null;
+  durationMs: number | null;
   sentimentAvg: number | null;
 }
-export interface TranscriptLine { id: number; speaker: string; text: string; timestamp: number; }
+export interface TranscriptLine {
+  id: number;
+  speaker: string;
+  text: string;
+  timestamp: number;
+}
 export interface SignalFrameRow {
-  id: number; promptType: string; promptText: string;
-  confidence: number; sentiment: number; dangerFlag: number; createdAt: number;
+  id: number;
+  promptType: string;
+  promptText: string;
+  confidence: number;
+  sentiment: number;
+  dangerFlag: number;
+  createdAt: number;
 }
 export interface CallSummaryRow {
-  winSignals: string[]; objections: string[]; decisions: string[];
-  followUpDraft: string; createdAt: number;
+  winSignals: string[];
+  objections: string[];
+  decisions: string[];
+  followUpDraft: string;
+  createdAt: number;
 }
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1815,18 +2046,23 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  contacts:        () => j<Contact[]>('/contacts'),
-  contact:    (id: string) => j<Contact>(`/contacts/${id}`),
+  contacts: () => j<Contact[]>('/contacts'),
+  contact: (id: string) => j<Contact>(`/contacts/${id}`),
   updateContact: (id: string, body: Partial<Contact>) =>
-    j<Contact>(`/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  calls:           () => j<CallSession[]>('/calls'),
-  call:       (id: string) => j<CallSession>(`/calls/${id}`),
+    j<Contact>(`/contacts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  calls: () => j<CallSession[]>('/calls'),
+  call: (id: string) => j<CallSession>(`/calls/${id}`),
   transcript: (id: string) => j<TranscriptLine[]>(`/calls/${id}/transcript`),
-  frames:     (id: string) => j<SignalFrameRow[]>(`/calls/${id}/frames`),
-  summary:    (id: string) => j<CallSummaryRow>(`/calls/${id}/summary`),
-  sentimentTrend: () => j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
-  promptTypes:    () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
-  objections:     () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
+  frames: (id: string) => j<SignalFrameRow[]>(`/calls/${id}/frames`),
+  summary: (id: string) => j<CallSummaryRow>(`/calls/${id}/summary`),
+  sentimentTrend: () =>
+    j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
+  promptTypes: () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
+  objections: () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
 };
 ```
 
@@ -1852,9 +2088,15 @@ export default function Home() {
     <div>
       <h2>Home</h2>
       <div className="stats">
-        <div>Total calls: <b>{total}</b></div>
-        <div>Avg sentiment: <b>{avg ? Math.round(avg) : '—'}/100</b></div>
-        <div>Top prompt type: <b>{topPrompt?.promptType ?? '—'}</b></div>
+        <div>
+          Total calls: <b>{total}</b>
+        </div>
+        <div>
+          Avg sentiment: <b>{avg ? Math.round(avg) : '—'}/100</b>
+        </div>
+        <div>
+          Top prompt type: <b>{topPrompt?.promptType ?? '—'}</b>
+        </div>
       </div>
       <h3>Recent calls</h3>
       <ul className="call-list">
@@ -1886,11 +2128,20 @@ export default function Contacts() {
     <div>
       <h2>Contacts</h2>
       <table className="data-table">
-        <thead><tr><th>Name</th><th>Company</th><th>Role</th><th>Email</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Email</th>
+          </tr>
+        </thead>
         <tbody>
           {q.data?.map(c => (
             <tr key={c.id}>
-              <td><Link to={`/contacts/${c.id}`}>{c.name}</Link></td>
+              <td>
+                <Link to={`/contacts/${c.id}`}>{c.name}</Link>
+              </td>
               <td>{c.company ?? '—'}</td>
               <td>{c.role ?? '—'}</td>
               <td>{c.email ?? '—'}</td>
@@ -1917,13 +2168,22 @@ export default function ContactDetail() {
   const contact = useQuery({ queryKey: ['contact', id], queryFn: () => api.contact(id) });
   const calls = useQuery({ queryKey: ['calls'], queryFn: api.calls });
 
-  const [form, setForm] = useState({ company: '', role: '', email: '', linkedinUrl: '', notes: '' });
+  const [form, setForm] = useState({
+    company: '',
+    role: '',
+    email: '',
+    linkedinUrl: '',
+    notes: '',
+  });
   useEffect(() => {
-    if (contact.data) setForm({
-      company: contact.data.company ?? '', role: contact.data.role ?? '',
-      email: contact.data.email ?? '', linkedinUrl: contact.data.linkedinUrl ?? '',
-      notes: contact.data.notes ?? '',
-    });
+    if (contact.data)
+      setForm({
+        company: contact.data.company ?? '',
+        role: contact.data.role ?? '',
+        email: contact.data.email ?? '',
+        linkedinUrl: contact.data.linkedinUrl ?? '',
+        notes: contact.data.notes ?? '',
+      });
   }, [contact.data]);
 
   const update = useMutation({
@@ -1937,19 +2197,50 @@ export default function ContactDetail() {
   return (
     <div>
       <h2>{contact.data.name}</h2>
-      <form className="contact-form" onSubmit={e => { e.preventDefault(); update.mutate(form); }}>
-        <label>Company <input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></label>
-        <label>Role <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} /></label>
-        <label>Email <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
-        <label>LinkedIn <input value={form.linkedinUrl} onChange={e => setForm({ ...form, linkedinUrl: e.target.value })} /></label>
-        <label>Notes <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></label>
+      <form
+        className="contact-form"
+        onSubmit={e => {
+          e.preventDefault();
+          update.mutate(form);
+        }}
+      >
+        <label>
+          Company{' '}
+          <input
+            value={form.company}
+            onChange={e => setForm({ ...form, company: e.target.value })}
+          />
+        </label>
+        <label>
+          Role{' '}
+          <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} />
+        </label>
+        <label>
+          Email{' '}
+          <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+        </label>
+        <label>
+          LinkedIn{' '}
+          <input
+            value={form.linkedinUrl}
+            onChange={e => setForm({ ...form, linkedinUrl: e.target.value })}
+          />
+        </label>
+        <label>
+          Notes{' '}
+          <textarea
+            value={form.notes}
+            onChange={e => setForm({ ...form, notes: e.target.value })}
+          />
+        </label>
         <button type="submit">Save</button>
       </form>
       <h3>Calls ({myCalls.length})</h3>
       <ul>
         {myCalls.map(c => (
           <li key={c.id}>
-            <a href={`/dashboard/calls/${c.id}`}>{new Date(c.startedAt).toLocaleString()}</a> — {c.callType}
+            <a href={`/dashboard/calls/${c.id}`}>{new Date(c.startedAt).toLocaleString()}</a> —{' '}
+            {c.callType}
             {c.sentimentAvg != null && ` · ${Math.round(c.sentimentAvg)}/100`}
           </li>
         ))}
@@ -1971,7 +2262,11 @@ export default function CallDetail() {
   const call = useQuery({ queryKey: ['call', id], queryFn: () => api.call(id) });
   const transcript = useQuery({ queryKey: ['transcript', id], queryFn: () => api.transcript(id) });
   const frames = useQuery({ queryKey: ['frames', id], queryFn: () => api.frames(id) });
-  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id), retry: false });
+  const summary = useQuery({
+    queryKey: ['summary', id],
+    queryFn: () => api.summary(id),
+    retry: false,
+  });
 
   if (!call.data) return <div>Loading…</div>;
   return (
@@ -1986,10 +2281,26 @@ export default function CallDetail() {
       {summary.data && (
         <section>
           <h3>Summary</h3>
-          <h4>Win signals</h4><ul>{summary.data.winSignals.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          <h4>Objections</h4><ul>{summary.data.objections.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          <h4>Decisions</h4><ul>{summary.data.decisions.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          <h4>Follow-up draft</h4><pre className="followup">{summary.data.followUpDraft}</pre>
+          <h4>Win signals</h4>
+          <ul>
+            {summary.data.winSignals.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+          <h4>Objections</h4>
+          <ul>
+            {summary.data.objections.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+          <h4>Decisions</h4>
+          <ul>
+            {summary.data.decisions.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+          <h4>Follow-up draft</h4>
+          <pre className="followup">{summary.data.followUpDraft}</pre>
         </section>
       )}
 
@@ -1997,7 +2308,9 @@ export default function CallDetail() {
         <h3>Transcript</h3>
         <div className="transcript">
           {transcript.data?.map(l => (
-            <div key={l.id}><b>[{l.speaker}]</b> {l.text}</div>
+            <div key={l.id}>
+              <b>[{l.speaker}]</b> {l.text}
+            </div>
           ))}
         </div>
       </section>
@@ -2021,29 +2334,121 @@ export default function CallDetail() {
 **Step 13: `src/styles.css`**
 
 ```css
-* { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #e5e5e5; background: #0b0b0d; }
-.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-.sidebar { padding: 24px 16px; background: #111114; border-right: 1px solid #222; }
-.sidebar h1 { margin: 0 0 24px; font-size: 18px; letter-spacing: 2px; }
-.sidebar a { display: block; color: #aaa; text-decoration: none; padding: 6px 0; }
-.sidebar a.active { color: #fff; }
-.content { padding: 32px; }
-.content h2 { margin: 0 0 16px; }
-.stats { display: flex; gap: 24px; margin-bottom: 24px; }
-.stats > div { padding: 12px 16px; background: #1a1a1f; border-radius: 8px; }
-.call-list { list-style: none; padding: 0; }
-.call-list li { padding: 8px 0; border-bottom: 1px solid #222; }
-.call-list a { color: #e5e5e5; text-decoration: none; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { padding: 10px; text-align: left; border-bottom: 1px solid #222; }
-.contact-form { display: grid; gap: 12px; max-width: 500px; margin-bottom: 24px; }
-.contact-form input, .contact-form textarea { padding: 8px; background: #1a1a1f; border: 1px solid #333; color: #e5e5e5; }
-.contact-form button { padding: 8px 16px; background: #f59e0b; border: 0; color: #000; cursor: pointer; }
-.transcript { background: #1a1a1f; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto; }
-.followup { background: #1a1a1f; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
-.frames { list-style: none; padding: 0; }
-.frames li { padding: 8px; border-bottom: 1px solid #222; }
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font:
+    14px/1.5 -apple-system,
+    system-ui,
+    sans-serif;
+  color: #e5e5e5;
+  background: #0b0b0d;
+}
+.app {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  padding: 24px 16px;
+  background: #111114;
+  border-right: 1px solid #222;
+}
+.sidebar h1 {
+  margin: 0 0 24px;
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+.sidebar a {
+  display: block;
+  color: #aaa;
+  text-decoration: none;
+  padding: 6px 0;
+}
+.sidebar a.active {
+  color: #fff;
+}
+.content {
+  padding: 32px;
+}
+.content h2 {
+  margin: 0 0 16px;
+}
+.stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.stats > div {
+  padding: 12px 16px;
+  background: #1a1a1f;
+  border-radius: 8px;
+}
+.call-list {
+  list-style: none;
+  padding: 0;
+}
+.call-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #222;
+}
+.call-list a {
+  color: #e5e5e5;
+  text-decoration: none;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #222;
+}
+.contact-form {
+  display: grid;
+  gap: 12px;
+  max-width: 500px;
+  margin-bottom: 24px;
+}
+.contact-form input,
+.contact-form textarea {
+  padding: 8px;
+  background: #1a1a1f;
+  border: 1px solid #333;
+  color: #e5e5e5;
+}
+.contact-form button {
+  padding: 8px 16px;
+  background: #f59e0b;
+  border: 0;
+  color: #000;
+  cursor: pointer;
+}
+.transcript {
+  background: #1a1a1f;
+  padding: 16px;
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.followup {
+  background: #1a1a1f;
+  padding: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+.frames {
+  list-style: none;
+  padding: 0;
+}
+.frames li {
+  padding: 8px;
+  border-bottom: 1px solid #222;
+}
 ```
 
 **Step 14: Modify `apps/server/package.json` scripts**
@@ -2077,6 +2482,7 @@ Visit `http://localhost:8080/dashboard/` in browser → SPA loads, shows Home pa
 **Step 16: `.gitignore` the build output**
 
 Add to repo root `.gitignore` (or create):
+
 ```
 apps/server/public/assets
 apps/server/public/index.html
@@ -2099,6 +2505,7 @@ git commit -m "feat(dashboard): Vite+React SPA with Home, Contacts, ContactDetai
 ## Task 12: Extension popup — `popup.html` + React components
 
 **Files:**
+
 - Create: `apps/extension/entrypoints/popup.html`
 - Create: `apps/extension/entrypoints/popup.tsx`
 - Create: `apps/extension/components/popup/PreCallSetup.tsx`
@@ -2136,12 +2543,17 @@ type View = 'pre' | 'post';
 
 function Popup() {
   const [view, setView] = useState<View>('pre');
-  const [prospect, setProspect] = useState<Prospect>({ name: '', company: '', email: '', linkedinUrl: '' });
+  const [prospect, setProspect] = useState<Prospect>({
+    name: '',
+    company: '',
+    email: '',
+    linkedinUrl: '',
+  });
   const [summary, setSummary] = useState<PostCallSummary | null>(null);
 
   // Load last detected prospect + any stored summary
   useEffect(() => {
-    chrome.storage.session.get(['detectedProspect', 'latestSummary', 'popupView']).then((d) => {
+    chrome.storage.session.get(['detectedProspect', 'latestSummary', 'popupView']).then(d => {
       if (d.detectedProspect) setProspect(p => ({ ...p, ...d.detectedProspect }));
       if (d.latestSummary) setSummary(d.latestSummary);
       if (d.popupView === 'post') setView('post');
@@ -2160,7 +2572,13 @@ function Popup() {
       {view === 'pre' ? (
         <PreCallSetup prospect={prospect} onChange={setProspect} onStart={handleStart} />
       ) : summary ? (
-        <PostCallView summary={summary} onNewCall={() => { setSummary(null); setView('pre'); }} />
+        <PostCallView
+          summary={summary}
+          onNewCall={() => {
+            setSummary(null);
+            setView('pre');
+          }}
+        />
       ) : (
         <div className="empty">No summary available.</div>
       )}
@@ -2194,24 +2612,56 @@ export function PreCallSetup({ prospect, onChange, onStart }: Props) {
     <div className="pre-call">
       <section>
         <h3>Prospect</h3>
-        <label>Name<input value={prospect.name} onChange={e => onChange({ ...prospect, name: e.target.value })} /></label>
-        <label>Company<input value={prospect.company ?? ''} onChange={e => onChange({ ...prospect, company: e.target.value })} /></label>
-        <label>Email<input value={prospect.email ?? ''} onChange={e => onChange({ ...prospect, email: e.target.value })} /></label>
-        <label>LinkedIn URL<input value={prospect.linkedinUrl ?? ''} onChange={e => onChange({ ...prospect, linkedinUrl: e.target.value })} /></label>
+        <label>
+          Name
+          <input
+            value={prospect.name}
+            onChange={e => onChange({ ...prospect, name: e.target.value })}
+          />
+        </label>
+        <label>
+          Company
+          <input
+            value={prospect.company ?? ''}
+            onChange={e => onChange({ ...prospect, company: e.target.value })}
+          />
+        </label>
+        <label>
+          Email
+          <input
+            value={prospect.email ?? ''}
+            onChange={e => onChange({ ...prospect, email: e.target.value })}
+          />
+        </label>
+        <label>
+          LinkedIn URL
+          <input
+            value={prospect.linkedinUrl ?? ''}
+            onChange={e => onChange({ ...prospect, linkedinUrl: e.target.value })}
+          />
+        </label>
       </section>
 
       <section>
         <h3>Call type</h3>
         <div className="pills">
           {CALL_TYPES.map(t => (
-            <button key={t} className={callType === t ? 'pill active' : 'pill'} onClick={() => setCallType(t)}>{t}</button>
+            <button
+              key={t}
+              className={callType === t ? 'pill active' : 'pill'}
+              onClick={() => setCallType(t)}
+            >
+              {t}
+            </button>
           ))}
         </div>
       </section>
 
       <OctaMemPanel prospect={prospect} />
 
-      <button className="start-btn" disabled={!canStart} onClick={() => onStart(callType)}>Start Call</button>
+      <button className="start-btn" disabled={!canStart} onClick={() => onStart(callType)}>
+        Start Call
+      </button>
     </div>
   );
 }
@@ -2222,17 +2672,35 @@ export function PreCallSetup({ prospect, onChange, onStart }: Props) {
 ```tsx
 import type { PostCallSummary } from '@signal/types';
 
-export function PostCallView({ summary, onNewCall }: { summary: PostCallSummary; onNewCall: () => void }) {
+export function PostCallView({
+  summary,
+  onNewCall,
+}: {
+  summary: PostCallSummary;
+  onNewCall: () => void;
+}) {
   const copy = () => navigator.clipboard.writeText(summary.followUpDraft);
   return (
     <div className="post-call">
       <h3>Call summary</h3>
       <h4>Win signals</h4>
-      <ul>{summary.winSignals.map((s, i) => <li key={i}>{s}</li>)}</ul>
+      <ul>
+        {summary.winSignals.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
       <h4>Objections</h4>
-      <ul>{summary.objections.map((s, i) => <li key={i}>{s}</li>)}</ul>
+      <ul>
+        {summary.objections.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
       <h4>Decisions</h4>
-      <ul>{summary.decisions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+      <ul>
+        {summary.decisions.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
       <h4>Follow-up draft</h4>
       <pre className="followup">{summary.followUpDraft}</pre>
       <div className="actions">
@@ -2255,14 +2723,19 @@ export function OctaMemPanel({ prospect }: { prospect: Prospect }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!prospect.name) { setContext(null); return; }
+    if (!prospect.name) {
+      setContext(null);
+      return;
+    }
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
         // Query through background (which knows the server URL)
         const res = await chrome.runtime.sendMessage({ type: 'OCTAMEM_QUERY', prospect });
         setContext(res?.context ?? null);
-      } catch { setContext(null); }
+      } catch {
+        setContext(null);
+      }
       setLoading(false);
     }, 500);
     return () => clearTimeout(timer);
@@ -2271,9 +2744,13 @@ export function OctaMemPanel({ prospect }: { prospect: Prospect }) {
   return (
     <section className="octamem">
       <h4>OctaMem context</h4>
-      {loading ? <div className="muted">Loading…</div>
-        : context ? <p>{context}</p>
-        : <div className="muted">No prior context.</div>}
+      {loading ? (
+        <div className="muted">Loading…</div>
+      ) : context ? (
+        <p>{context}</p>
+      ) : (
+        <div className="muted">No prior context.</div>
+      )}
     </section>
   );
 }
@@ -2282,27 +2759,133 @@ export function OctaMemPanel({ prospect }: { prospect: Prospect }) {
 **Step 6: `popup.css`**
 
 ```css
-html, body { margin: 0; width: 360px; font: 13px/1.4 -apple-system, system-ui, sans-serif; color: #e5e5e5; background: #0b0b0d; }
-.popup { padding: 16px; }
-.popup header { font-size: 16px; letter-spacing: 2px; margin-bottom: 12px; color: #f59e0b; }
-.pre-call section { margin-bottom: 16px; }
-.pre-call h3 { font-size: 12px; text-transform: uppercase; color: #888; margin: 0 0 8px; }
-.pre-call label { display: block; margin-bottom: 8px; font-size: 11px; color: #aaa; }
-.pre-call input { width: 100%; padding: 6px 8px; background: #1a1a1f; border: 1px solid #333; color: #e5e5e5; border-radius: 4px; }
-.pills { display: flex; gap: 4px; }
-.pill { flex: 1; padding: 6px; background: #1a1a1f; border: 1px solid #333; color: #aaa; cursor: pointer; border-radius: 4px; font-size: 11px; }
-.pill.active { background: #f59e0b; color: #000; border-color: #f59e0b; }
-.octamem { background: #1a1a1f; padding: 12px; border-radius: 6px; }
-.octamem h4 { margin: 0 0 6px; font-size: 11px; color: #f59e0b; text-transform: uppercase; }
-.octamem .muted { color: #666; font-size: 11px; }
-.start-btn { width: 100%; padding: 10px; background: #f59e0b; color: #000; border: 0; font-weight: 600; cursor: pointer; border-radius: 4px; margin-top: 8px; }
-.start-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
-.post-call h3 { margin: 0 0 12px; }
-.post-call h4 { margin: 12px 0 4px; font-size: 11px; color: #888; text-transform: uppercase; }
-.post-call ul { margin: 0; padding-left: 16px; }
-.followup { background: #1a1a1f; padding: 10px; border-radius: 4px; white-space: pre-wrap; font-size: 12px; }
-.actions { display: flex; gap: 8px; margin-top: 12px; }
-.actions button { flex: 1; padding: 8px; background: #1a1a1f; border: 1px solid #333; color: #e5e5e5; cursor: pointer; border-radius: 4px; }
+html,
+body {
+  margin: 0;
+  width: 360px;
+  font:
+    13px/1.4 -apple-system,
+    system-ui,
+    sans-serif;
+  color: #e5e5e5;
+  background: #0b0b0d;
+}
+.popup {
+  padding: 16px;
+}
+.popup header {
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  color: #f59e0b;
+}
+.pre-call section {
+  margin-bottom: 16px;
+}
+.pre-call h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #888;
+  margin: 0 0 8px;
+}
+.pre-call label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #aaa;
+}
+.pre-call input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #1a1a1f;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  border-radius: 4px;
+}
+.pills {
+  display: flex;
+  gap: 4px;
+}
+.pill {
+  flex: 1;
+  padding: 6px;
+  background: #1a1a1f;
+  border: 1px solid #333;
+  color: #aaa;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.pill.active {
+  background: #f59e0b;
+  color: #000;
+  border-color: #f59e0b;
+}
+.octamem {
+  background: #1a1a1f;
+  padding: 12px;
+  border-radius: 6px;
+}
+.octamem h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #f59e0b;
+  text-transform: uppercase;
+}
+.octamem .muted {
+  color: #666;
+  font-size: 11px;
+}
+.start-btn {
+  width: 100%;
+  padding: 10px;
+  background: #f59e0b;
+  color: #000;
+  border: 0;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+.start-btn:disabled {
+  background: #333;
+  color: #888;
+  cursor: not-allowed;
+}
+.post-call h3 {
+  margin: 0 0 12px;
+}
+.post-call h4 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+}
+.post-call ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.followup {
+  background: #1a1a1f;
+  padding: 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.actions button {
+  flex: 1;
+  padding: 8px;
+  background: #1a1a1f;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  cursor: pointer;
+  border-radius: 4px;
+}
 ```
 
 **Step 7: Commit**
@@ -2317,6 +2900,7 @@ git commit -m "feat(extension): popup with pre-call setup + post-call view + Oct
 ## Task 13: Update `content.tsx` — DOM scraping for prospect detection
 
 **Files:**
+
 - Modify: `apps/extension/entrypoints/content.tsx`
 
 **Step 1: Add `detectProspectNames()` helper and MutationObserver**
@@ -2331,8 +2915,8 @@ import { useSignalStore } from '../overlay/store';
 import type { ServerMessage } from '@signal/types';
 
 const PLATFORM_SELECTORS = {
-  meet:  '.zWGUib',
-  zoom:  '.participants-entry__name',
+  meet: '.zWGUib',
+  zoom: '.participants-entry__name',
   teams: '[data-tid="roster-participant"]',
 } as const;
 
@@ -2348,16 +2932,15 @@ function scrapeNames(platform: keyof typeof PLATFORM_SELECTORS): string[] {
   const sel = PLATFORM_SELECTORS[platform];
   const nodes = document.querySelectorAll<HTMLElement>(sel);
   const names = new Set<string>();
-  nodes.forEach(n => { const t = n.textContent?.trim(); if (t && t.length > 1 && t.length < 80) names.add(t); });
+  nodes.forEach(n => {
+    const t = n.textContent?.trim();
+    if (t && t.length > 1 && t.length < 80) names.add(t);
+  });
   return [...names];
 }
 
 export default defineContentScript({
-  matches: [
-    '*://meet.google.com/*',
-    '*://*.zoom.us/wc/*',
-    '*://teams.microsoft.com/*',
-  ],
+  matches: ['*://meet.google.com/*', '*://*.zoom.us/wc/*', '*://teams.microsoft.com/*'],
   cssInjectionMode: 'ui',
 
   async main(ctx) {
@@ -2367,15 +2950,22 @@ export default defineContentScript({
       anchor: 'body',
       onMount(container, _shadow, shadowHost) {
         Object.assign(shadowHost.style, {
-          position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
-          pointerEvents: 'none', width: 'auto', height: 'auto',
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: '2147483647',
+          pointerEvents: 'none',
+          width: 'auto',
+          height: 'auto',
         });
         container.style.pointerEvents = 'auto';
         const root = ReactDOM.createRoot(container);
         root.render(<Overlay useMockFixture={false} />);
         return root;
       },
-      onRemove(root) { root?.unmount(); },
+      onRemove(root) {
+        root?.unmount();
+      },
     });
     ui.mount();
 
@@ -2385,7 +2975,9 @@ export default defineContentScript({
       const notify = () => {
         const names = scrapeNames(platform);
         if (names.length > 0) {
-          chrome.runtime.sendMessage({ type: 'PROSPECT_DETECTED', platform, names }).catch(() => {});
+          chrome.runtime
+            .sendMessage({ type: 'PROSPECT_DETECTED', platform, names })
+            .catch(() => {});
         }
       };
       notify();
@@ -2401,10 +2993,18 @@ export default defineContentScript({
     chrome.runtime.onMessage.addListener((msg: ServerMessage) => {
       const store = useSignalStore.getState();
       switch (msg.type) {
-        case 'frame':      store.setFrame(msg.frame); break;
-        case 'transcript': store.appendTranscriptLine(msg.line); break;
-        case 'state':      store.setOverlayState(msg.overlayState); break;
-        case 'connected':  store.setOverlayState('LIVE'); break;
+        case 'frame':
+          store.setFrame(msg.frame);
+          break;
+        case 'transcript':
+          store.appendTranscriptLine(msg.line);
+          break;
+        case 'state':
+          store.setOverlayState(msg.overlayState);
+          break;
+        case 'connected':
+          store.setOverlayState('LIVE');
+          break;
         case 'summary':
           chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
           store.setOverlayState('POSTCALL');
@@ -2430,6 +3030,7 @@ git commit -m "feat(extension): DOM prospect detection + summary storage for pop
 ## Task 14: Update `background.ts` — prospect storage + WS start carries prospect
 
 **Files:**
+
 - Modify: `apps/extension/entrypoints/background.ts`
 
 **Step 1: Rewrite `background.ts`**
@@ -2472,7 +3073,10 @@ export default defineBackground(() => {
       // Legacy auto-trigger from content.tsx — only proceed if prospect already present
       activeTabId = sender.tab?.id ?? null;
       chrome.storage.session.get(['pendingProspect']).then(d => {
-        if (!d.pendingProspect) { sendResponse({ error: 'no prospect — open popup first' }); return; }
+        if (!d.pendingProspect) {
+          sendResponse({ error: 'no prospect — open popup first' });
+          return;
+        }
         startCapture(sendResponse);
       });
       return true;
@@ -2487,7 +3091,9 @@ export default defineBackground(() => {
     if (msg.type === 'OCTAMEM_QUERY') {
       // Popup can't hit the server directly with auth headers from popup context in some setups —
       // simplest is to GET through a Fastify proxy or call directly. For self-hosted, direct fetch works.
-      queryOctaMem(msg.prospect as Prospect).then(context => sendResponse({ context })).catch(() => sendResponse({ context: null }));
+      queryOctaMem(msg.prospect as Prospect)
+        .then(context => sendResponse({ context }))
+        .catch(() => sendResponse({ context: null }));
       return true;
     }
   });
@@ -2503,13 +3109,15 @@ async function queryOctaMem(prospect: Prospect): Promise<string | null> {
       body: JSON.stringify({ prospect }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { context: string | null };
+    const data = (await res.json()) as { context: string | null };
     return data.context;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function startCapture(sendResponse: (r: unknown) => void): void {
-  chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+  chrome.tabCapture.capture({ audio: true, video: false }, stream => {
     if (!stream) {
       sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
       return;
@@ -2520,7 +3128,10 @@ function startCapture(sendResponse: (r: unknown) => void): void {
 }
 
 async function connectWs(stream: MediaStream): Promise<void> {
-  const { pendingProspect, pendingCallType } = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']);
+  const { pendingProspect, pendingCallType } = await chrome.storage.session.get([
+    'pendingProspect',
+    'pendingCallType',
+  ]);
   const prospect: Prospect = pendingProspect ?? { name: 'Unknown' };
   const callType: CallType = pendingCallType ?? 'enterprise';
 
@@ -2534,7 +3145,7 @@ async function connectWs(stream: MediaStream): Promise<void> {
     startRecorder(stream, ws);
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = event => {
     try {
       const msg = JSON.parse(event.data as string) as ServerMessage;
       if (activeTabId !== null) {
@@ -2543,17 +3154,21 @@ async function connectWs(stream: MediaStream): Promise<void> {
       if (msg.type === 'summary') {
         chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
-  ws.onerror = (err) => console.error('[SIGNAL] WS error:', err);
+  ws.onerror = err => console.error('[SIGNAL] WS error:', err);
 
   ws.onclose = () => {
     stopRecorder();
     if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
       const delay = RECONNECT_DELAYS[reconnectAttempt] ?? 4000;
       reconnectAttempt++;
-      setTimeout(() => { void connectWs(stream); }, delay);
+      setTimeout(() => {
+        void connectWs(stream);
+      }, delay);
     }
   };
 }
@@ -2563,7 +3178,7 @@ function startRecorder(stream: MediaStream, ws: WebSocket): void {
   if (!MediaRecorder.isTypeSupported(mimeType)) return;
   const rec = new MediaRecorder(stream, { mimeType });
   recorder = rec;
-  rec.ondataavailable = (e) => {
+  rec.ondataavailable = e => {
     if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
       void e.data.arrayBuffer().then(buf => ws.send(buf));
     }
@@ -2591,16 +3206,16 @@ function stopCapture(): void {
 Modify `apps/server/src/routes/api.ts` to add:
 
 ```ts
-  // Popup helper: query OctaMem via server (extension can't hold the key)
-  app.post('/api/octamem/query', async (req) => {
-    const { prospect } = req.body as { prospect: { name: string; company?: string } };
-    const { queryProspectContext } = await import('../services/octamem.js');
-    const context = await queryProspectContext({
-      apiKey: process.env.OCTAMEM_API_KEY ?? '',
-      prospect,
-    });
-    return { context };
+// Popup helper: query OctaMem via server (extension can't hold the key)
+app.post('/api/octamem/query', async req => {
+  const { prospect } = req.body as { prospect: { name: string; company?: string } };
+  const { queryProspectContext } = await import('../services/octamem.js');
+  const context = await queryProspectContext({
+    apiKey: process.env.OCTAMEM_API_KEY ?? '',
+    prospect,
   });
+  return { context };
+});
 ```
 
 **Step 3: Commit**
@@ -2615,6 +3230,7 @@ git commit -m "feat(extension): pass prospect to WS start; popup OctaMem proxy e
 ## Task 15: Update `wxt.config.ts` — register popup entry
 
 **Files:**
+
 - Modify: `apps/extension/wxt.config.ts`
 
 **Step 1: Add popup to manifest**
@@ -2689,12 +3305,15 @@ Expected: server bundles to `apps/server/dist/index.js`, dashboard built into `a
 **Step 4: End-to-end smoke test**
 
 Terminal 1:
+
 ```bash
 cd apps/server && pnpm dev
 ```
+
 Expected: logs placeholder warnings, listens on :8080.
 
 Terminal 2:
+
 ```bash
 curl -s http://localhost:8080/health        # → { ok: true, ts: ... }
 curl -s http://localhost:8080/api/contacts  # → []

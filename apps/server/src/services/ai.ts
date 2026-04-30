@@ -12,7 +12,14 @@ export interface AIProvider {
   complete(opts: AICompleteOpts): Promise<string | null>;
 }
 
-const PLACEHOLDER_PREFIXES = ['sk-ant-your-key', 'sk-or-your-key', 'your-'];
+const PLACEHOLDER_PREFIXES = [
+  'placeholder',
+  'sk-ant-placeholder',
+  'sk-ant-your-key',
+  'sk-or-placeholder',
+  'sk-or-your-key',
+  'your-',
+];
 function isPlaceholder(key: string): boolean {
   if (!key) return true;
   return PLACEHOLDER_PREFIXES.some(p => key.startsWith(p));
@@ -38,14 +45,22 @@ export class NoOpProvider implements AIProvider {
 
 export class ClaudeProvider implements AIProvider {
   private client: Anthropic;
-  constructor(apiKey: string) { this.client = new Anthropic({ apiKey }); }
+  constructor(apiKey: string) {
+    this.client = new Anthropic({ apiKey });
+  }
   async complete(opts: AICompleteOpts): Promise<string | null> {
     try {
       const res = await this.client.messages.create({
         model: opts.model,
         max_tokens: opts.maxTokens,
         system: opts.cache
-          ? [{ type: 'text' as const, text: opts.systemPrompt, cache_control: { type: 'ephemeral' as const } }]
+          ? [
+              {
+                type: 'text' as const,
+                text: opts.systemPrompt,
+                cache_control: { type: 'ephemeral' as const },
+              },
+            ]
           : opts.systemPrompt,
         messages: [{ role: 'user' as const, content: opts.userPrompt }],
       });
@@ -65,7 +80,7 @@ export class OpenRouterProvider implements AIProvider {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -78,7 +93,7 @@ export class OpenRouterProvider implements AIProvider {
         }),
       });
       if (!res.ok) return null;
-      const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       return data.choices?.[0]?.message?.content ?? null;
     } catch (err) {
       console.error('[SIGNAL] OpenRouter call failed:', err);

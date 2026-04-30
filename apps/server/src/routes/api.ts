@@ -3,22 +3,45 @@ import { randomUUID } from 'node:crypto';
 import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
-  contacts, callSessions, transcriptLines, signalFrames, callSummaries,
-  transcriptEmbeddings, upcomingMeetings, type DB,
+  contacts,
+  callSessions,
+  transcriptLines,
+  signalFrames,
+  callSummaries,
+  transcriptEmbeddings,
+  upcomingMeetings,
+  type DB,
 } from '../services/db.js';
 import type { CalendarAttendee } from '../services/calendar.js';
 import { queryProspectContext } from '../services/octamem.js';
-import { embed, cosineSimilarity, unpackFloat32, isPlaceholderVoyageKey } from '../services/embeddings.js';
+import {
+  embed,
+  cosineSimilarity,
+  unpackFloat32,
+  isPlaceholderVoyageKey,
+} from '../services/embeddings.js';
 
-export interface ApiRouteOptions { db: DB; octamemApiKey: string; voyageApiKey: string; }
+export interface ApiRouteOptions {
+  db: DB;
+  octamemApiKey: string;
+  voyageApiKey: string;
+}
 
 function safeParseArray(json: string): string[] {
-  try { return JSON.parse(json) as string[]; } catch { return []; }
+  try {
+    return JSON.parse(json) as string[];
+  } catch {
+    return [];
+  }
 }
 
 function safeParseJson<T>(json: string | null): T | null {
   if (!json) return null;
-  try { return JSON.parse(json) as T; } catch { return null; }
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return null;
+  }
 }
 
 // ── Request body schemas ─────────────────────────────────────────────
@@ -58,9 +81,15 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     const now = Date.now();
     const id = randomUUID();
     const row = {
-      id, name: body.name, email: body.email, linkedinUrl: body.linkedinUrl,
-      company: body.company, role: body.role, notes: body.notes,
-      createdAt: now, updatedAt: now,
+      id,
+      name: body.name,
+      email: body.email,
+      linkedinUrl: body.linkedinUrl,
+      company: body.company,
+      role: body.role,
+      notes: body.notes,
+      createdAt: now,
+      updatedAt: now,
     };
     db.insert(contacts).values(row).run();
     return reply.code(201).send(row);
@@ -105,20 +134,22 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     return row;
   });
 
-  app.get('/api/calls/:id/transcript', async (req) => {
+  app.get('/api/calls/:id/transcript', async req => {
     const id = (req.params as { id: string }).id;
     return db.select().from(transcriptLines).where(eq(transcriptLines.sessionId, id)).all();
   });
 
-  app.get('/api/calls/:id/frames', async (req) => {
+  app.get('/api/calls/:id/frames', async req => {
     const id = (req.params as { id: string }).id;
-    const rows = db.select().from(signalFrames)
+    const rows = db
+      .select()
+      .from(signalFrames)
       .where(eq(signalFrames.sessionId, id))
       .orderBy(signalFrames.createdAt)
       .all();
     // Add `timestamp` alias and relative offset from call start for UI
     const call = db.select().from(callSessions).where(eq(callSessions.id, id)).get();
-    const startedAt = call?.startedAt ?? (rows[0]?.createdAt ?? 0);
+    const startedAt = call?.startedAt ?? rows[0]?.createdAt ?? 0;
     return rows.map(r => ({
       ...r,
       timestamp: r.createdAt,
@@ -147,26 +178,37 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid body', details: parsed.error.issues });
     }
-    const context = await queryProspectContext({ apiKey: octamemApiKey, prospect: parsed.data.prospect });
+    const context = await queryProspectContext({
+      apiKey: octamemApiKey,
+      prospect: parsed.data.prospect,
+    });
     return { context };
   });
 
   // ── Analytics ──────────────────────────────────────────────────────
 
   app.get('/api/analytics/sentiment', async () => {
-    return db.select({
-      week: sql<string>`strftime('%Y-%W', started_at / 1000, 'unixepoch')`,
-      avg: sql<number>`AVG(sentiment_avg)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(callSessions).where(sql`sentiment_avg IS NOT NULL`)
-      .groupBy(sql`strftime('%Y-%W', started_at / 1000, 'unixepoch')`).all();
+    return db
+      .select({
+        week: sql<string>`strftime('%Y-%W', started_at / 1000, 'unixepoch')`,
+        avg: sql<number>`AVG(sentiment_avg)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(callSessions)
+      .where(sql`sentiment_avg IS NOT NULL`)
+      .groupBy(sql`strftime('%Y-%W', started_at / 1000, 'unixepoch')`)
+      .all();
   });
 
   app.get('/api/analytics/prompt-types', async () => {
-    return db.select({
-      promptType: signalFrames.promptType,
-      count: sql<number>`COUNT(*)`,
-    }).from(signalFrames).groupBy(signalFrames.promptType).all();
+    return db
+      .select({
+        promptType: signalFrames.promptType,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(signalFrames)
+      .groupBy(signalFrames.promptType)
+      .all();
   });
 
   app.get('/api/analytics/objections', async () => {
@@ -176,7 +218,8 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
       const list = safeParseArray(r.objections);
       for (const o of list) counts.set(o, (counts.get(o) ?? 0) + 1);
     }
-    return [...counts.entries()].map(([objection, count]) => ({ objection, count }))
+    return [...counts.entries()]
+      .map(([objection, count]) => ({ objection, count }))
       .sort((a, b) => b.count - a.count);
   });
 
@@ -213,14 +256,16 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
     // Enrich with contact + call metadata.
     const sessionIds = [...new Set(top.map(t => t.sessionId))];
-    const sessions = sessionIds.length > 0
-      ? db.select().from(callSessions).where(inArray(callSessions.id, sessionIds)).all()
-      : [];
+    const sessions =
+      sessionIds.length > 0
+        ? db.select().from(callSessions).where(inArray(callSessions.id, sessionIds)).all()
+        : [];
     const sessionById = new Map(sessions.map(s => [s.id, s]));
     const contactIds = [...new Set(sessions.map(s => s.contactId).filter((x): x is string => !!x))];
-    const contactRows = contactIds.length > 0
-      ? db.select().from(contacts).where(inArray(contacts.id, contactIds)).all()
-      : [];
+    const contactRows =
+      contactIds.length > 0
+        ? db.select().from(contacts).where(inArray(contacts.id, contactIds)).all()
+        : [];
     const contactById = new Map(contactRows.map(c => [c.id, c]));
 
     return top.map(t => {
@@ -259,8 +304,12 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   app.get('/api/calendar/next', async () => {
     const now = Date.now();
     const HORIZON_MS = 15 * 60 * 1000; // match poller window
-    const row = db.select().from(upcomingMeetings)
-      .where(sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`)
+    const row = db
+      .select()
+      .from(upcomingMeetings)
+      .where(
+        sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`,
+      )
       .orderBy(asc(upcomingMeetings.startTime))
       .limit(1)
       .get();
@@ -270,8 +319,12 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
   app.get('/api/calendar/upcoming', async () => {
     const now = Date.now();
     const HORIZON_MS = 60 * 60 * 1000; // next 1 hour
-    const rows = db.select().from(upcomingMeetings)
-      .where(sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`)
+    const rows = db
+      .select()
+      .from(upcomingMeetings)
+      .where(
+        sql`${upcomingMeetings.startTime} > ${now} AND ${upcomingMeetings.startTime} <= ${now + HORIZON_MS}`,
+      )
       .orderBy(asc(upcomingMeetings.startTime))
       .all();
     return rows.map(hydrateMeeting);
@@ -279,15 +332,21 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   // ── Contact-scoped aggregates ──────────────────────────────────────
 
-  app.get('/api/contacts/:id/objections', async (req) => {
+  app.get('/api/contacts/:id/objections', async req => {
     const id = (req.params as { id: string }).id;
-    const sessions = db.select({ id: callSessions.id })
-      .from(callSessions).where(eq(callSessions.contactId, id)).all();
+    const sessions = db
+      .select({ id: callSessions.id })
+      .from(callSessions)
+      .where(eq(callSessions.contactId, id))
+      .all();
     const sessionIds = sessions.map(s => s.id);
     if (sessionIds.length === 0) return [];
     // Single indexed query (previously loaded all summaries then filtered in-memory)
-    const summaries = db.select().from(callSummaries)
-      .where(inArray(callSummaries.sessionId, sessionIds)).all();
+    const summaries = db
+      .select()
+      .from(callSummaries)
+      .where(inArray(callSummaries.sessionId, sessionIds))
+      .all();
     const counts = new Map<string, number>();
     for (const s of summaries) {
       const list = safeParseArray(s.objections);

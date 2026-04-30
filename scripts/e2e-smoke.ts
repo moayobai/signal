@@ -35,7 +35,9 @@ const WS_URL = `ws://localhost:${PORT}/ws?token=${encodeURIComponent(AUTH_TOKEN)
 let serverProc: ChildProcess | null = null;
 const results: Array<{ step: string; ok: boolean; detail?: string }> = [];
 
-function log(msg: string): void { process.stdout.write(`[E2E] ${msg}\n`); }
+function log(msg: string): void {
+  process.stdout.write(`[E2E] ${msg}\n`);
+}
 function record(step: string, ok: boolean, detail?: string): void {
   results.push({ step, ok, detail });
   log(`${ok ? 'OK  ' : 'FAIL'} — ${step}${detail ? `  (${detail})` : ''}`);
@@ -51,17 +53,22 @@ async function startServer(): Promise<void> {
   const tsxBin = resolve(SERVER_CWD, 'node_modules/.bin/tsx');
   serverProc = spawn(tsxBin, ['src/index.ts'], {
     cwd: SERVER_CWD,
-    env: { ...process.env, PORT: String(PORT), DATABASE_URL: './signal.db', SIGNAL_AUTH_TOKEN: AUTH_TOKEN },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATABASE_URL: './signal.db',
+      SIGNAL_AUTH_TOKEN: AUTH_TOKEN,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   let ready = false;
-  serverProc.stdout?.on('data', (chunk) => {
+  serverProc.stdout?.on('data', chunk => {
     const s = chunk.toString();
     if (s.includes('Server listening at')) ready = true;
     process.stdout.write(`  [server] ${s}`);
   });
-  serverProc.stderr?.on('data', (chunk) => process.stderr.write(`  [server:err] ${chunk}`));
+  serverProc.stderr?.on('data', chunk => process.stderr.write(`  [server:err] ${chunk}`));
 
   for (let i = 0; i < 40; i++) {
     if (ready) return;
@@ -78,44 +85,99 @@ async function stopServer(): Promise<void> {
 }
 
 async function Bun_rm(path: string): Promise<void> {
-  try { await import('node:fs/promises').then(fs => fs.rm(path, { force: true })); } catch {}
+  try {
+    await import('node:fs/promises').then(fs => fs.rm(path, { force: true }));
+  } catch {}
 }
 
-async function http<T = unknown>(path: string, init?: RequestInit): Promise<{ status: number; body: T | string }> {
+async function http<T = unknown>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number; body: T | string }> {
   const headers = new Headers(init?.headers);
   headers.set('Authorization', `Bearer ${AUTH_TOKEN}`);
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   const text = await res.text();
   let body: T | string = text;
-  try { body = JSON.parse(text) as T; } catch {}
+  try {
+    body = JSON.parse(text) as T;
+  } catch {}
   return { status: res.status, body };
+}
+
+async function probeAuthGuards(): Promise<void> {
+  const unauthenticated = await fetch(`${BASE}/api/contacts`);
+  record(
+    'GET /api/contacts rejects missing auth',
+    unauthenticated.status === 401,
+    `status=${unauthenticated.status}`,
+  );
+
+  const invalid = await fetch(`${BASE}/api/contacts`, {
+    headers: { Authorization: 'Bearer wrong-token' },
+  });
+  record(
+    'GET /api/contacts rejects wrong auth',
+    invalid.status === 401,
+    `status=${invalid.status}`,
+  );
+
+  const dashboardToken = await fetch(`${BASE}/dashboard/?token=${encodeURIComponent(AUTH_TOKEN)}`, {
+    redirect: 'manual',
+  });
+  record(
+    'GET /dashboard/?token=... redirects after setting cookie',
+    dashboardToken.status === 302 &&
+      dashboardToken.headers.get('set-cookie')?.includes('signal_auth=') === true &&
+      dashboardToken.headers.get('location') === '/dashboard/',
+    `status=${dashboardToken.status}, location=${dashboardToken.headers.get('location')}`,
+  );
 }
 
 async function probeRestEmpty(): Promise<void> {
   const health = await http<{ ok: boolean }>('/health');
-  record('GET /health returns ok', health.status === 200 && (health.body as any)?.ok === true, `status=${health.status}`);
+  record(
+    'GET /health returns ok',
+    health.status === 200 && (health.body as any)?.ok === true,
+    `status=${health.status}`,
+  );
 
   const contacts = await http<unknown[]>('/api/contacts');
-  record('GET /api/contacts empty array', contacts.status === 200 && Array.isArray(contacts.body) && contacts.body.length === 0);
+  record(
+    'GET /api/contacts empty array',
+    contacts.status === 200 && Array.isArray(contacts.body) && contacts.body.length === 0,
+  );
 
   const calls = await http<unknown[]>('/api/calls');
-  record('GET /api/calls empty array', calls.status === 200 && Array.isArray(calls.body) && calls.body.length === 0);
+  record(
+    'GET /api/calls empty array',
+    calls.status === 200 && Array.isArray(calls.body) && calls.body.length === 0,
+  );
 
   const analytics = await http<unknown[]>('/api/analytics/sentiment');
-  record('GET /api/analytics/sentiment empty array', analytics.status === 200 && Array.isArray(analytics.body));
+  record(
+    'GET /api/analytics/sentiment empty array',
+    analytics.status === 200 && Array.isArray(analytics.body),
+  );
 
   const octaRes = await http<{ context: string | null }>('/api/octamem/query', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prospect: { name: 'James', company: 'Acme' } }),
   });
-  record('POST /api/octamem/query returns null with placeholder key',
-    octaRes.status === 200 && (octaRes.body as any)?.context === null);
+  record(
+    'POST /api/octamem/query returns null with placeholder key',
+    octaRes.status === 200 && (octaRes.body as any)?.context === null,
+  );
 
   const dashboard = await fetch(`${BASE}/dashboard/`, {
     headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
   });
-  record('GET /dashboard/ serves SPA', dashboard.status === 200,
-    `status=${dashboard.status}, content-type=${dashboard.headers.get('content-type')}`);
+  record(
+    'GET /dashboard/ serves SPA',
+    dashboard.status === 200,
+    `status=${dashboard.status}, content-type=${dashboard.headers.get('content-type')}`,
+  );
 }
 
 interface WSTranscript {
@@ -133,16 +195,22 @@ async function runWsSession(prospect: { name: string; company?: string }): Promi
     ws.once('error', reject);
   });
 
-  ws.on('message', (data) => transcript.received.push(data.toString()));
-  ws.on('error', (err) => transcript.errors.push(err.message));
-  ws.on('close', () => { transcript.closed = true; });
+  ws.on('message', data => transcript.received.push(data.toString()));
+  ws.on('error', err => transcript.errors.push(err.message));
+  ws.on('close', () => {
+    transcript.closed = true;
+  });
 
   await wait(100); // let `connected` arrive
 
-  ws.send(JSON.stringify({
-    type: 'start', platform: 'meet', callType: 'investor',
-    prospect,
-  }));
+  ws.send(
+    JSON.stringify({
+      type: 'start',
+      platform: 'meet',
+      callType: 'investor',
+      prospect,
+    }),
+  );
 
   // Let the server do its async work (contact upsert, OctaMem query, call_session insert)
   await wait(600);
@@ -161,41 +229,75 @@ async function probeWsFlow(): Promise<string | null> {
   const prospect = { name: 'James Carter', company: 'Acme Ventures' };
   const result = await runWsSession(prospect);
 
-  record('WS received any messages', result.received.length > 0,
-    `count=${result.received.length}, errors=${result.errors.length}`);
+  record(
+    'WS received any messages',
+    result.received.length > 0,
+    `count=${result.received.length}, errors=${result.errors.length}`,
+  );
 
-  const connected = result.received.map(m => {
-    try { return JSON.parse(m); } catch { return null; }
-  }).find(m => m?.type === 'connected');
-  record('WS received `connected` message', !!connected,
-    connected ? `sessionId=${connected.sessionId}` : 'missing');
+  const connected = result.received
+    .map(m => {
+      try {
+        return JSON.parse(m);
+      } catch {
+        return null;
+      }
+    })
+    .find(m => m?.type === 'connected');
+  record(
+    'WS received `connected` message',
+    !!connected,
+    connected ? `sessionId=${connected.sessionId}` : 'missing',
+  );
 
-  const liveState = result.received.map(m => {
-    try { return JSON.parse(m); } catch { return null; }
-  }).find(m => m?.type === 'state' && m.overlayState === 'LIVE');
+  const liveState = result.received
+    .map(m => {
+      try {
+        return JSON.parse(m);
+      } catch {
+        return null;
+      }
+    })
+    .find(m => m?.type === 'state' && m.overlayState === 'LIVE');
   record('WS received LIVE state after start', !!liveState);
 
   return connected?.sessionId ?? null;
 }
 
-async function probeDbAfterStart(): Promise<{ contactId: string | null; sessionId: string | null }> {
+async function probeDbAfterStart(): Promise<{
+  contactId: string | null;
+  sessionId: string | null;
+}> {
   const db = new Database(DB_PATH, { readonly: true });
 
   const contacts = db.prepare('SELECT * FROM contacts').all() as any[];
-  record('DB contacts row present', contacts.length === 1,
-    contacts[0] ? `name=${contacts[0].name}, company=${contacts[0].company}` : 'no rows');
+  record(
+    'DB contacts row present',
+    contacts.length === 1,
+    contacts[0] ? `name=${contacts[0].name}, company=${contacts[0].company}` : 'no rows',
+  );
 
   const sessions = db.prepare('SELECT * FROM call_sessions').all() as any[];
-  record('DB call_sessions row present', sessions.length === 1,
-    sessions[0] ? `platform=${sessions[0].platform}, type=${sessions[0].call_type}, ended=${!!sessions[0].ended_at}` : 'no rows');
+  record(
+    'DB call_sessions row present',
+    sessions.length === 1,
+    sessions[0]
+      ? `platform=${sessions[0].platform}, type=${sessions[0].call_type}, ended=${!!sessions[0].ended_at}`
+      : 'no rows',
+  );
 
-  record('call_session linked to contact',
+  record(
+    'call_session linked to contact',
     sessions[0]?.contact_id === contacts[0]?.id,
-    `contact_id=${sessions[0]?.contact_id}`);
+    `contact_id=${sessions[0]?.contact_id}`,
+  );
 
   // With placeholder keys, durationMs should be set (we sent stop) and sentimentAvg should be NULL (no frames)
   record('call_session ended_at populated on stop', sessions[0]?.ended_at !== null);
-  record('call_session sentiment_avg is NULL (no frames in sim)', sessions[0]?.sentiment_avg === null);
+  record(
+    'call_session sentiment_avg is NULL (no frames in sim)',
+    sessions[0]?.sentiment_avg === null,
+  );
 
   db.close();
   return {
@@ -211,31 +313,60 @@ async function seedSyntheticData(contactId: string, sessionId: string): Promise<
 
   // 6 transcript lines alternating speakers
   const lines = [
-    { speaker: 'user',     text: 'Thanks for taking the time, James.', t: now - 180_000 },
+    { speaker: 'user', text: 'Thanks for taking the time, James.', t: now - 180_000 },
     { speaker: 'prospect', text: 'Happy to. Walk me through the round.', t: now - 170_000 },
-    { speaker: 'user',     text: 'We\'re raising a three million dollar seed.', t: now - 160_000 },
-    { speaker: 'prospect', text: 'What\'s the burn?',                           t: now - 140_000 },
-    { speaker: 'user',     text: '180k monthly, 18 months of runway.',          t: now - 130_000 },
-    { speaker: 'prospect', text: 'Send me the deck and I\'ll circle back.',     t: now - 90_000 },
+    { speaker: 'user', text: "We're raising a three million dollar seed.", t: now - 160_000 },
+    { speaker: 'prospect', text: "What's the burn?", t: now - 140_000 },
+    { speaker: 'user', text: '180k monthly, 18 months of runway.', t: now - 130_000 },
+    { speaker: 'prospect', text: "Send me the deck and I'll circle back.", t: now - 90_000 },
   ];
-  const insertLine = db.prepare('INSERT INTO transcript_lines (session_id, speaker, text, timestamp) VALUES (?, ?, ?, ?)');
+  const insertLine = db.prepare(
+    'INSERT INTO transcript_lines (session_id, speaker, text, timestamp) VALUES (?, ?, ?, ?)',
+  );
   for (const l of lines) insertLine.run(sessionId, l.speaker, l.text, l.t);
 
   // 3 signal frames
   const insertFrame = db.prepare(
-    'INSERT INTO signal_frames (session_id, prompt_type, prompt_text, confidence, sentiment, danger_flag, created_at) VALUES (?,?,?,?,?,?,?)'
+    'INSERT INTO signal_frames (session_id, prompt_type, prompt_text, confidence, sentiment, danger_flag, created_at) VALUES (?,?,?,?,?,?,?)',
   );
-  insertFrame.run(sessionId, 'ASK',    'Ask about their Series A timeline',     0.82, 68, 0, now - 150_000);
-  insertFrame.run(sessionId, 'WARN',   'Pricing objection incoming — reframe',   0.75, 55, 1, now - 120_000);
-  insertFrame.run(sessionId, 'CLOSE',  'Propose next step: deck + intro call',   0.88, 74, 0, now -  95_000);
+  insertFrame.run(
+    sessionId,
+    'ASK',
+    'Ask about their Series A timeline',
+    0.82,
+    68,
+    0,
+    now - 150_000,
+  );
+  insertFrame.run(
+    sessionId,
+    'WARN',
+    'Pricing objection incoming — reframe',
+    0.75,
+    55,
+    1,
+    now - 120_000,
+  );
+  insertFrame.run(
+    sessionId,
+    'CLOSE',
+    'Propose next step: deck + intro call',
+    0.88,
+    74,
+    0,
+    now - 95_000,
+  );
 
   // Update call_session with sentimentAvg
-  db.prepare('UPDATE call_sessions SET sentiment_avg = ?, duration_ms = ? WHERE id = ?')
-    .run((68 + 55 + 74) / 3, 180_000, sessionId);
+  db.prepare('UPDATE call_sessions SET sentiment_avg = ?, duration_ms = ? WHERE id = ?').run(
+    (68 + 55 + 74) / 3,
+    180_000,
+    sessionId,
+  );
 
   // Summary row
   db.prepare(
-    'INSERT INTO call_summaries (id, session_id, win_signals, objections, decisions, follow_up_draft, created_at) VALUES (?,?,?,?,?,?,?)'
+    'INSERT INTO call_summaries (id, session_id, win_signals, objections, decisions, follow_up_draft, created_at) VALUES (?,?,?,?,?,?,?)',
   ).run(
     randomUUID(),
     sessionId,
@@ -250,47 +381,75 @@ async function seedSyntheticData(contactId: string, sessionId: string): Promise<
 
 async function probeRestPopulated(contactId: string, sessionId: string): Promise<void> {
   const contact = await http<any>(`/api/contacts/${contactId}`);
-  record('GET /api/contacts/:id returns seeded contact',
-    contact.status === 200 && (contact.body as any).name === 'James Carter');
+  record(
+    'GET /api/contacts/:id returns seeded contact',
+    contact.status === 200 && (contact.body as any).name === 'James Carter',
+  );
 
   const update = await http<any>(`/api/contacts/${contactId}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ role: 'Managing Partner', notes: 'Decision maker.' }),
   });
-  record('PUT /api/contacts/:id persists role+notes',
-    update.status === 200 && (update.body as any).role === 'Managing Partner');
+  record(
+    'PUT /api/contacts/:id persists role+notes',
+    update.status === 200 && (update.body as any).role === 'Managing Partner',
+  );
 
   const calls = await http<any[]>('/api/calls');
-  record('GET /api/calls now returns 1 row',
-    calls.status === 200 && Array.isArray(calls.body) && (calls.body as any[]).length === 1);
+  record(
+    'GET /api/calls now returns 1 row',
+    calls.status === 200 && Array.isArray(calls.body) && (calls.body as any[]).length === 1,
+  );
 
   const transcript = await http<any[]>(`/api/calls/${sessionId}/transcript`);
-  record('GET /api/calls/:id/transcript returns 6 lines',
-    transcript.status === 200 && Array.isArray(transcript.body) && (transcript.body as any[]).length === 6);
+  record(
+    'GET /api/calls/:id/transcript returns 6 lines',
+    transcript.status === 200 &&
+      Array.isArray(transcript.body) &&
+      (transcript.body as any[]).length === 6,
+  );
 
   const frames = await http<any[]>(`/api/calls/${sessionId}/frames`);
-  record('GET /api/calls/:id/frames returns 3 frames',
-    frames.status === 200 && (frames.body as any[]).length === 3);
+  record(
+    'GET /api/calls/:id/frames returns 3 frames',
+    frames.status === 200 && (frames.body as any[]).length === 3,
+  );
 
   const summary = await http<any>(`/api/calls/${sessionId}/summary`);
-  record('GET /api/calls/:id/summary parses JSON arrays',
+  record(
+    'GET /api/calls/:id/summary parses JSON arrays',
     summary.status === 200 &&
-    Array.isArray((summary.body as any).winSignals) &&
-    (summary.body as any).winSignals.length === 2 &&
-    (summary.body as any).followUpDraft.includes('James'));
+      Array.isArray((summary.body as any).winSignals) &&
+      (summary.body as any).winSignals.length === 2 &&
+      (summary.body as any).followUpDraft.includes('James'),
+  );
 
-  const promptTypes = await http<Array<{ promptType: string; count: number }>>('/api/analytics/prompt-types');
+  const promptTypes = await http<Array<{ promptType: string; count: number }>>(
+    '/api/analytics/prompt-types',
+  );
   const typesSet = new Set((promptTypes.body as any[]).map(r => r.promptType));
-  record('GET /api/analytics/prompt-types aggregates ASK/WARN/CLOSE',
-    promptTypes.status === 200 && typesSet.has('ASK') && typesSet.has('WARN') && typesSet.has('CLOSE'));
+  record(
+    'GET /api/analytics/prompt-types aggregates ASK/WARN/CLOSE',
+    promptTypes.status === 200 &&
+      typesSet.has('ASK') &&
+      typesSet.has('WARN') &&
+      typesSet.has('CLOSE'),
+  );
 
-  const objections = await http<Array<{ objection: string; count: number }>>('/api/analytics/objections');
-  record('GET /api/analytics/objections returns aggregated list',
-    objections.status === 200 && (objections.body as any[]).length >= 1);
+  const objections = await http<Array<{ objection: string; count: number }>>(
+    '/api/analytics/objections',
+  );
+  record(
+    'GET /api/analytics/objections returns aggregated list',
+    objections.status === 200 && (objections.body as any[]).length >= 1,
+  );
 
   const sentimentTrend = await http<any[]>('/api/analytics/sentiment');
-  record('GET /api/analytics/sentiment returns weekly bucket',
-    sentimentTrend.status === 200 && (sentimentTrend.body as any[]).length === 1);
+  record(
+    'GET /api/analytics/sentiment returns weekly bucket',
+    sentimentTrend.status === 200 && (sentimentTrend.body as any[]).length === 1,
+  );
 }
 
 async function probeSecondCall(): Promise<void> {
@@ -317,7 +476,8 @@ function printSummary(): number {
   if (failed > 0) {
     log('');
     log('Failures:');
-    for (const r of results.filter(r => !r.ok)) log(`  ✗ ${r.step}${r.detail ? ` — ${r.detail}` : ''}`);
+    for (const r of results.filter(r => !r.ok))
+      log(`  ✗ ${r.step}${r.detail ? ` — ${r.detail}` : ''}`);
   }
   return failed;
 }
@@ -325,6 +485,7 @@ function printSummary(): number {
 async function main(): Promise<void> {
   try {
     await startServer();
+    await probeAuthGuards();
     await probeRestEmpty();
 
     await probeWsFlow();

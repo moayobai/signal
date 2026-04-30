@@ -4,9 +4,18 @@ import { api, type Contact, type CallSession, type UpcomingMeeting } from '../li
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, TrendingIcon, SparkIcon, TargetIcon } from '../components/icons';
 
-interface TrendPoint { week: string; avg: number; count: number }
+interface TrendPoint {
+  week: string;
+  avg: number;
+  count: number;
+}
 
-function buildSparkPath(points: TrendPoint[], w: number, h: number, pad = 4): { line: string; area: string } {
+function buildSparkPath(
+  points: TrendPoint[],
+  w: number,
+  h: number,
+  pad = 4,
+): { line: string; area: string } {
   if (points.length === 0) return { line: '', area: '' };
   const n = points.length;
   const xs = points.map((_, i) => pad + (i * (w - pad * 2)) / Math.max(1, n - 1));
@@ -43,7 +52,12 @@ function Sparkline({ points }: { points: TrendPoint[] }) {
   const lastX = 4 + ((n - 1) * (w - 8)) / Math.max(1, n - 1);
   const lastY = h - 4 - (Math.max(0, Math.min(100, points[n - 1].avg)) / 100) * (h - 8);
   return (
-    <svg className="sparkline" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
       <defs>
         <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#f5a524" stopOpacity="0.35" />
@@ -58,14 +72,19 @@ function Sparkline({ points }: { points: TrendPoint[] }) {
 }
 
 const TYPE_TAG: Record<string, string> = {
-  investor: 'tag-investor', enterprise: 'tag-enterprise',
-  bd: 'tag-bd', customer: 'tag-customer',
+  investor: 'tag-investor',
+  enterprise: 'tag-enterprise',
+  bd: 'tag-bd',
+  customer: 'tag-customer',
 };
 
 function formatWhen(ts: number): string {
   const d = new Date(ts);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-    ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return (
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' · ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  );
 }
 
 export default function Home() {
@@ -80,26 +99,36 @@ export default function Home() {
   const trendPoints = (trend.data ?? []).slice(-6);
 
   const total = calls.data?.length ?? 0;
-  const sentValues = calls.data?.filter(c => c.sentimentAvg != null).map(c => c.sentimentAvg!) ?? [];
-  const avgSent = sentValues.length ? sentValues.reduce((a, b) => a + b, 0) / sentValues.length : null;
+  const sentValues =
+    calls.data?.filter(c => c.sentimentAvg != null).map(c => c.sentimentAvg!) ?? [];
+  const avgSent = sentValues.length
+    ? sentValues.reduce((a, b) => a + b, 0) / sentValues.length
+    : null;
 
   const now = Date.now();
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const thisWeek = calls.data?.filter(c => now - c.startedAt < WEEK_MS).length ?? 0;
-  const lastWeek = calls.data?.filter(c => {
-    const age = now - c.startedAt;
-    return age >= WEEK_MS && age < 2 * WEEK_MS;
-  }).length ?? 0;
+  const lastWeek =
+    calls.data?.filter(c => {
+      const age = now - c.startedAt;
+      return age >= WEEK_MS && age < 2 * WEEK_MS;
+    }).length ?? 0;
 
   const talkValues = calls.data?.filter(c => c.talkRatio != null).map(c => c.talkRatio!) ?? [];
-  const avgTalk = talkValues.length ? talkValues.reduce((a, b) => a + b, 0) / talkValues.length : null;
+  const avgTalk = talkValues.length
+    ? talkValues.reduce((a, b) => a + b, 0) / talkValues.length
+    : null;
   const talkPct = avgTalk != null ? Math.round(avgTalk * 100) : null;
-  const talkColor = talkPct == null
-    ? undefined
-    : talkPct > 65 ? '#ef4444'
-    : talkPct > 55 ? '#f5a524'
-    : talkPct >= 35 ? '#22c55e'
-    : '#f5a524';
+  const talkColor =
+    talkPct == null
+      ? undefined
+      : talkPct > 65
+        ? '#ef4444'
+        : talkPct > 55
+          ? '#f5a524'
+          : talkPct >= 35
+            ? '#22c55e'
+            : '#f5a524';
 
   const recent = (calls.data ?? []).slice(0, 8);
   const contactById = new Map<string, Contact>();
@@ -110,7 +139,9 @@ export default function Home() {
       <header className="page-head">
         <div className="titles">
           <span className="eyebrow">Today · Overview</span>
-          <h1>Your <em>signal</em> at a glance</h1>
+          <h1>
+            Your <em>signal</em> at a glance
+          </h1>
           <p className="subtitle">
             Recent calls, sentiment trend, and how active this week has been. Tap a row to dive in.
           </p>
@@ -122,8 +153,13 @@ export default function Home() {
       <div className="stat-grid">
         <article className="stat stat-with-ring">
           <div>
-            <div className="label"><SparkIcon size={11} /> Total calls</div>
-            <div className="value">{total}<span className="unit">recorded</span></div>
+            <div className="label">
+              <SparkIcon size={11} /> Total calls
+            </div>
+            <div className="value">
+              {total}
+              <span className="unit">recorded</span>
+            </div>
             <div className="delta">
               <strong>{contacts.data?.length ?? 0}</strong> contacts in your CRM
             </div>
@@ -131,14 +167,18 @@ export default function Home() {
         </article>
 
         <article className="stat">
-          <div className="label"><TrendingIcon size={11} /> Sentiment trend</div>
+          <div className="label">
+            <TrendingIcon size={11} /> Sentiment trend
+          </div>
           <div className="value" style={{ fontSize: 36 }}>
             {avgSent != null ? Math.round(avgSent) : '—'}
             <span className="unit">/ 100 avg</span>
           </div>
-          {trendPoints.length > 0
-            ? <Sparkline points={trendPoints} />
-            : <div className="skel-text" style={{ marginTop: 10, height: 48 }} />}
+          {trendPoints.length > 0 ? (
+            <Sparkline points={trendPoints} />
+          ) : (
+            <div className="skel-text" style={{ marginTop: 10, height: 48 }} />
+          )}
           <div className="delta">
             <strong>{trendPoints.length}</strong> weeks · last {trendPoints.length} points
           </div>
@@ -146,8 +186,13 @@ export default function Home() {
 
         <article className="stat stat-with-ring">
           <div>
-            <div className="label"><TargetIcon size={11} /> Calls · this week</div>
-            <div className="value">{thisWeek}<span className="unit">in last 7 days</span></div>
+            <div className="label">
+              <TargetIcon size={11} /> Calls · this week
+            </div>
+            <div className="value">
+              {thisWeek}
+              <span className="unit">in last 7 days</span>
+            </div>
             <div className="delta">
               vs <strong>{lastWeek}</strong> last week
             </div>
@@ -156,9 +201,12 @@ export default function Home() {
 
         <article className="stat stat-with-ring">
           <div>
-            <div className="label"><TargetIcon size={11} /> Avg talk time</div>
+            <div className="label">
+              <TargetIcon size={11} /> Avg talk time
+            </div>
             <div className="value" style={talkColor ? { color: talkColor } : undefined}>
-              {talkPct != null ? `${talkPct}%` : '—'}<span className="unit">you</span>
+              {talkPct != null ? `${talkPct}%` : '—'}
+              <span className="unit">you</span>
             </div>
             <div className="delta">
               <strong>{talkValues.length}</strong> calls measured · target 45%
@@ -174,7 +222,9 @@ export default function Home() {
 
       {recent.length === 0 ? (
         <div className="empty glass">
-          <div className="glyph"><SparkIcon /></div>
+          <div className="glyph">
+            <SparkIcon />
+          </div>
           <p>No calls yet. Open a meeting and SIGNAL will appear here.</p>
         </div>
       ) : (
@@ -196,12 +246,20 @@ function minutesFromNow(ts: number): number {
   return Math.max(0, Math.round((ts - Date.now()) / 60000));
 }
 
-function NextMeetingCard({ meeting, contacts }: { meeting: UpcomingMeeting | null; contacts: Contact[] }) {
+function NextMeetingCard({
+  meeting,
+  contacts,
+}: {
+  meeting: UpcomingMeeting | null;
+  contacts: Contact[];
+}) {
   const navigate = useNavigate();
   if (!meeting) {
     return (
       <article className="glass" style={{ padding: 16, marginBottom: 20, opacity: 0.7 }}>
-        <div className="label" style={{ marginBottom: 4 }}>Next meeting</div>
+        <div className="label" style={{ marginBottom: 4 }}>
+          Next meeting
+        </div>
         <div style={{ color: 'var(--muted, #8a8a8a)' }}>No meetings in the next hour.</div>
       </article>
     );
@@ -215,17 +273,37 @@ function NextMeetingCard({ meeting, contacts }: { meeting: UpcomingMeeting | nul
     : undefined;
 
   return (
-    <article className="glass" style={{ padding: 16, marginBottom: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+    <article
+      className="glass"
+      style={{
+        padding: 16,
+        marginBottom: 20,
+        display: 'flex',
+        gap: 16,
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      }}
+    >
       <div style={{ flex: '1 1 260px', minWidth: 0 }}>
         <div className="label" style={{ marginBottom: 4 }}>
           Next meeting · {meeting.provider === 'google' ? 'Google' : 'Outlook'}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {meeting.title}
         </div>
         <div style={{ marginTop: 4, color: 'var(--muted, #8a8a8a)', fontSize: 13 }}>
           Starts in <strong>{mins}</strong> min · {shown.map(a => a.name ?? a.email).join(', ')}
-          {meeting.attendees.length > shown.length ? ` +${meeting.attendees.length - shown.length}` : ''}
+          {meeting.attendees.length > shown.length
+            ? ` +${meeting.attendees.length - shown.length}`
+            : ''}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -267,7 +345,9 @@ function CallRow({ call, contact }: { call: CallSession; contact?: Contact }) {
           {call.durationMs ? `${Math.round(call.durationMs / 60000)} min` : '—'}
         </span>
         <span className="when">{formatWhen(call.startedAt)}</span>
-        <span className="arrow"><ArrowRightIcon /></span>
+        <span className="arrow">
+          <ArrowRightIcon />
+        </span>
       </Link>
     </li>
   );

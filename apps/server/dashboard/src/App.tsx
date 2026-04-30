@@ -20,15 +20,21 @@ export default function App() {
 
         <nav className="nav">
           <NavLink to="/" end>
-            <span className="icon"><HomeIcon /></span>
+            <span className="icon">
+              <HomeIcon />
+            </span>
             <span>Home</span>
           </NavLink>
           <NavLink to="/contacts">
-            <span className="icon"><ContactsIcon /></span>
+            <span className="icon">
+              <ContactsIcon />
+            </span>
             <span>Contacts</span>
           </NavLink>
           <NavLink to="/search">
-            <span className="icon"><SearchIcon /></span>
+            <span className="icon">
+              <SearchIcon />
+            </span>
             <span>Search</span>
           </NavLink>
         </nav>
@@ -36,7 +42,9 @@ export default function App() {
         <div className="sidebar-foot">
           <div className="row">
             <span>Server</span>
-            <span className="row-flex"><span className="pulse" /> Online</span>
+            <span className="row-flex">
+              <span className="pulse" /> Online
+            </span>
           </div>
           <div className="row">
             <span>Build</span>

@@ -94,7 +94,10 @@ export interface TranscriptChunk {
   text: string;
 }
 
-interface LineLike { speaker: string; text: string }
+interface LineLike {
+  speaker: string;
+  text: string;
+}
 
 const TARGET_WORDS = 200;
 

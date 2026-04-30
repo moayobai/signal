@@ -23,7 +23,8 @@ describe('REST API', () => {
   it('POST /api/contacts creates a contact', async () => {
     const { app } = await buildApp();
     const res = await app.inject({
-      method: 'POST', url: '/api/contacts',
+      method: 'POST',
+      url: '/api/contacts',
       payload: { name: 'James', company: 'Acme' },
     });
     expect(res.statusCode).toBe(201);
@@ -54,7 +55,8 @@ describe('REST API', () => {
     const now = Date.now();
     db.insert(contacts).values({ id: 'c1', name: 'James', createdAt: now, updatedAt: now }).run();
     const res = await app.inject({
-      method: 'PUT', url: '/api/contacts/c1',
+      method: 'PUT',
+      url: '/api/contacts/c1',
       payload: { company: 'Acme Updated', notes: 'Great contact' },
     });
     expect(res.statusCode).toBe(200);

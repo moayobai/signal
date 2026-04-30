@@ -1,5 +1,13 @@
 import type { ClientMessage, ServerMessage, Prospect, CallType } from '@signal/types';
 import { shouldReconnectAfterClose, stopMediaStreamTracks } from '../lib/captureLifecycle';
+import {
+  authHeaders,
+  authenticatedWsUrl,
+  DEFAULT_SIGNAL_SERVER_URL,
+  readSignalConnectionConfig,
+  type SignalConnectionConfig,
+  wsUrlFromServerUrl,
+} from '../lib/connectionConfig';
 
 declare const __WS_URL__: string;
 declare const __SIGNAL_AUTH_TOKEN__: string;
@@ -18,49 +26,68 @@ let activeTabId: number | null = null;
 let reconnectAttempt = 0;
 let intentionalStop = false;
 
+const DEFAULT_CONNECTION: SignalConnectionConfig = {
+  serverUrl: DEFAULT_SIGNAL_SERVER_URL,
+  authToken: SIGNAL_AUTH_TOKEN,
+};
+
+try {
+  DEFAULT_CONNECTION.serverUrl = new URL(WS_URL).origin;
+} catch {
+  DEFAULT_CONNECTION.serverUrl = DEFAULT_SIGNAL_SERVER_URL;
+}
+
 export default defineBackground(() => {
-  chrome.runtime.onMessage.addListener((msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
-    if (msg.type === 'PROSPECT_DETECTED') {
-      const first = (msg.names as string[]).find(n => n.length > 1);
-      if (first) {
-        chrome.storage.session.set({
-          detectedProspect: { name: first },
-          pendingPlatform: msg.platform ?? 'meet',
-        });
-      }
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (msg.type === 'POPUP_START_REQUEST') {
-      // User clicked Start Call — kick off capture on last active tab
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]: chrome.tabs.Tab[]) => {
-        if (tab?.id != null) {
-          activeTabId = tab.id;
-          startCapture(() => sendResponse({ ok: true }));
+  chrome.runtime.onMessage.addListener(
+    (msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+      if (msg.type === 'PROSPECT_DETECTED') {
+        const first = (msg.names as string[]).find(n => n.length > 1);
+        if (first) {
+          chrome.storage.session.set({
+            detectedProspect: { name: first },
+            pendingPlatform: msg.platform ?? 'meet',
+          });
         }
-      });
-      return true;
-    }
+        sendResponse({ ok: true });
+        return;
+      }
 
-    if (msg.type === 'STOP_CAPTURE') {
-      stopCapture();
-      sendResponse({ ok: true });
-      return;
-    }
+      if (msg.type === 'POPUP_START_REQUEST') {
+        // User clicked Start Call — kick off capture on last active tab
+        chrome.tabs
+          .query({ active: true, lastFocusedWindow: true })
+          .then(([tab]: chrome.tabs.Tab[]) => {
+            if (tab?.id != null) {
+              activeTabId = tab.id;
+              startCapture(() => sendResponse({ ok: true }));
+            }
+          });
+        return true;
+      }
 
-    if (msg.type === 'OCTAMEM_QUERY') {
-      // Popup can't hit the server directly with auth headers from popup context in some setups —
-      // simplest is to GET through a Fastify proxy or call directly. For self-hosted, direct fetch works.
-      queryOctaMem(msg.prospect as Prospect).then(context => sendResponse({ context })).catch(() => sendResponse({ context: null }));
-      return true;
-    }
+      if (msg.type === 'STOP_CAPTURE') {
+        stopCapture();
+        sendResponse({ ok: true });
+        return;
+      }
 
-    if (msg.type === 'NEXT_MEETING') {
-      fetchNextMeeting().then(meeting => sendResponse({ meeting })).catch(() => sendResponse({ meeting: null }));
-      return true;
-    }
-  });
+      if (msg.type === 'OCTAMEM_QUERY') {
+        // Popup can't hit the server directly with auth headers from popup context in some setups —
+        // simplest is to GET through a Fastify proxy or call directly. For self-hosted, direct fetch works.
+        queryOctaMem(msg.prospect as Prospect)
+          .then(context => sendResponse({ context }))
+          .catch(() => sendResponse({ context: null }));
+        return true;
+      }
+
+      if (msg.type === 'NEXT_MEETING') {
+        fetchNextMeeting()
+          .then(meeting => sendResponse({ meeting }))
+          .catch(() => sendResponse({ meeting: null }));
+        return true;
+      }
+    },
+  );
 });
 
 interface NextMeetingResponse {
@@ -75,73 +102,88 @@ interface NextMeetingResponse {
 
 async function fetchNextMeeting(): Promise<NextMeetingResponse | null> {
   try {
-    const base = __WS_URL__.replace(/^ws/, 'http');
-    const res = await fetch(`${base}/api/calendar/next`, { headers: authHeaders() });
+    const config = await readSignalConnectionConfig(DEFAULT_CONNECTION);
+    const res = await fetch(`${config.serverUrl}/api/calendar/next`, {
+      headers: authHeaders(config.authToken),
+    });
     if (!res.ok) return null;
-    return await res.json() as NextMeetingResponse | null;
-  } catch { return null; }
+    return (await res.json()) as NextMeetingResponse | null;
+  } catch {
+    return null;
+  }
 }
 
 async function queryOctaMem(prospect: Prospect): Promise<string | null> {
   if (!prospect?.name) return null;
   try {
-    const base = __WS_URL__.replace(/^ws/, 'http');
-    const res = await fetch(`${base}/api/octamem/query`, {
+    const config = await readSignalConnectionConfig(DEFAULT_CONNECTION);
+    const res = await fetch(`${config.serverUrl}/api/octamem/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(config.authToken) },
       body: JSON.stringify({ prospect }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { context: string | null };
+    const data = (await res.json()) as { context: string | null };
     return data.context;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function startCapture(sendResponse: (r: unknown) => void): void {
   intentionalStop = false;
-  if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  // Capture both audio and video so we can extract frames for Hume AI face analysis.
-  // Video capture may be denied on some platforms — we fall back to audio-only.
-  chrome.tabCapture.capture({ audio: true, video: true }, (stream: MediaStream | null) => {
-    if (!stream) {
-      // Fallback: audio-only (Hume face analysis will be unavailable)
-      chrome.tabCapture.capture({ audio: true, video: false }, (audioStream: MediaStream | null) => {
-        if (!audioStream) {
-          sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  readSignalConnectionConfig(DEFAULT_CONNECTION)
+    .then(config => {
+      if (!config.authToken.trim()) {
+        sendResponse({ error: 'Connection auth token is required' });
+        return;
+      }
+      // Capture both audio and video so we can extract frames for Hume AI face analysis.
+      // Video capture may be denied on some platforms; we fall back to audio-only.
+      chrome.tabCapture.capture({ audio: true, video: true }, (stream: MediaStream | null) => {
+        if (!stream) {
+          // Fallback: audio-only (Hume face analysis will be unavailable)
+          chrome.tabCapture.capture(
+            { audio: true, video: false },
+            (audioStream: MediaStream | null) => {
+              if (!audioStream) {
+                sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
+                return;
+              }
+              activeStream = audioStream;
+              connectWs(audioStream, config);
+              sendResponse({ ok: true });
+            },
+          );
           return;
         }
-        activeStream = audioStream;
-        connectWs(audioStream);
+        activeStream = stream;
+        connectWs(stream, config);
         sendResponse({ ok: true });
       });
-      return;
-    }
-    activeStream = stream;
-    connectWs(stream);
-    sendResponse({ ok: true });
-  });
+    })
+    .catch(() => sendResponse({ error: 'Invalid connection settings' }));
 }
 
-function authHeaders(): Record<string, string> {
-  return SIGNAL_AUTH_TOKEN ? { Authorization: `Bearer ${SIGNAL_AUTH_TOKEN}` } : {};
-}
-
-function authenticatedWsUrl(): string {
-  if (!SIGNAL_AUTH_TOKEN) return WS_URL;
-  const url = new URL(WS_URL);
-  url.searchParams.set('token', SIGNAL_AUTH_TOKEN);
-  return url.toString();
-}
-
-async function connectWs(stream: MediaStream): Promise<void> {
-  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType', 'pendingPlatform']) as Record<string, any>;
+async function connectWs(stream: MediaStream, config: SignalConnectionConfig): Promise<void> {
+  const stored = (await chrome.storage.session.get([
+    'pendingProspect',
+    'pendingCallType',
+    'pendingPlatform',
+  ])) as Record<string, any>;
   const prospect: Prospect = stored.pendingProspect ?? { name: 'Unknown' };
   const callType: CallType = stored.pendingCallType ?? 'enterprise';
   const platform: 'meet' | 'zoom' | 'teams' = stored.pendingPlatform ?? 'meet';
 
   if (intentionalStop) return;
 
-  const ws = new WebSocket(authenticatedWsUrl());
+  const ws = new WebSocket(
+    authenticatedWsUrl(wsUrlFromServerUrl(config.serverUrl), config.authToken),
+  );
   wsocket = ws;
 
   ws.onopen = () => {
@@ -152,7 +194,7 @@ async function connectWs(stream: MediaStream): Promise<void> {
     startVideoFramer(stream, ws);
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = event => {
     try {
       const msg = JSON.parse(event.data as string) as ServerMessage;
       if (activeTabId !== null) {
@@ -161,25 +203,29 @@ async function connectWs(stream: MediaStream): Promise<void> {
       if (msg.type === 'summary') {
         chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
-  ws.onerror = (err) => console.error('[SIGNAL] WS error:', err);
+  ws.onerror = err => console.error('[SIGNAL] WS error:', err);
 
   ws.onclose = () => {
     if (wsocket === ws) wsocket = null;
     stopRecorder();
     stopVideoFramer();
-    if (shouldReconnectAfterClose({
-      intentionalStop,
-      reconnectAttempt,
-      maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
-    })) {
+    if (
+      shouldReconnectAfterClose({
+        intentionalStop,
+        reconnectAttempt,
+        maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+      })
+    ) {
       const delay = RECONNECT_DELAYS[reconnectAttempt] ?? 4000;
       reconnectAttempt++;
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        void connectWs(stream);
+        void connectWs(stream, config);
       }, delay);
     }
   };
@@ -190,7 +236,7 @@ function startRecorder(stream: MediaStream, ws: WebSocket): void {
   if (!MediaRecorder.isTypeSupported(mimeType)) return;
   const rec = new MediaRecorder(stream, { mimeType });
   recorder = rec;
-  rec.ondataavailable = (e) => {
+  rec.ondataavailable = e => {
     if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
       void e.data.arrayBuffer().then(buf => ws.send(buf));
     }
@@ -239,7 +285,10 @@ function startVideoFramer(stream: MediaStream, ws: WebSocket): void {
 }
 
 function stopVideoFramer(): void {
-  if (frameInterval !== null) { clearInterval(frameInterval); frameInterval = null; }
+  if (frameInterval !== null) {
+    clearInterval(frameInterval);
+    frameInterval = null;
+  }
 }
 
 function stopRecorder(): void {
@@ -254,7 +303,10 @@ function stopMediaStream(): void {
 
 function stopCapture(): void {
   intentionalStop = true;
-  if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   stopRecorder();
   stopVideoFramer();
   if (wsocket) {

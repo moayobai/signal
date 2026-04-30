@@ -6,16 +6,23 @@ describe('octamem', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('queryProspectContext returns null when key is placeholder', async () => {
-    const res = await queryProspectContext({ apiKey: 'your-octamem-key-here', prospect: { name: 'J' } });
+    const res = await queryProspectContext({
+      apiKey: 'your-octamem-key-here',
+      prospect: { name: 'J' },
+    });
     expect(res).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it('queryProspectContext returns result string on success', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true, json: async () => ({ result: 'Last spoke 2026-03-10' }),
+      ok: true,
+      json: async () => ({ result: 'Last spoke 2026-03-10' }),
     });
-    const res = await queryProspectContext({ apiKey: 'real-key', prospect: { name: 'James', company: 'Acme' } });
+    const res = await queryProspectContext({
+      apiKey: 'real-key',
+      prospect: { name: 'James', company: 'Acme' },
+    });
     expect(res).toBe('Last spoke 2026-03-10');
   });
 
@@ -28,7 +35,10 @@ describe('octamem', () => {
   it('storeCallMemory returns null when key is placeholder', async () => {
     const res = await storeCallMemory({
       apiKey: 'your-octamem-key-here',
-      contact: { name: 'J' }, callType: 'investor', durationMs: 0, sentimentAvg: 0,
+      contact: { name: 'J' },
+      callType: 'investor',
+      durationMs: 0,
+      sentimentAvg: 0,
       summary: { winSignals: [], objections: [], decisions: [], followUpDraft: '' },
       dangerMoments: [],
     });
@@ -37,7 +47,8 @@ describe('octamem', () => {
 
   it('storeCallMemory posts formatted memory and returns id', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true, json: async () => ({ id: 'mem_123' }),
+      ok: true,
+      json: async () => ({ id: 'mem_123' }),
     });
     const res = await storeCallMemory({
       apiKey: 'real-key',
@@ -45,12 +56,19 @@ describe('octamem', () => {
       callType: 'investor',
       durationMs: 1800000,
       sentimentAvg: 72,
-      summary: { winSignals: ['Asked about timing'], objections: ['Burn rate'], decisions: ['Send deck'], followUpDraft: 'James, great...' },
+      summary: {
+        winSignals: ['Asked about timing'],
+        objections: ['Burn rate'],
+        decisions: ['Send deck'],
+        followUpDraft: 'James, great...',
+      },
       dangerMoments: [{ reason: 'pricing objection', timestamp: 1700000000000 }],
       previousOctamemId: 'mem_prev',
     });
     expect(res).toBe('mem_123');
-    const body = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string);
+    const body = JSON.parse(
+      (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string,
+    );
     expect(body.content).toContain('James');
     expect(body.content).toContain('investor');
     expect(body.previousContext).toBe('mem_prev');

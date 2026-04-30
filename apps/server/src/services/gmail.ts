@@ -39,17 +39,21 @@ export async function refreshAccessToken(opts: RefreshTokenOpts): Promise<string
       refresh_token: opts.refreshToken,
       grant_type: 'refresh_token',
     });
-    const res = await fetchWithTimeout(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }, TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      TOKEN_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+      TIMEOUT_MS,
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       console.error('[SIGNAL] Gmail token refresh failed:', res.status, txt);
       return null;
     }
-    const data = await res.json() as { access_token?: string };
+    const data = (await res.json()) as { access_token?: string };
     return data.access_token ?? null;
   } catch (err) {
     console.error('[SIGNAL] Gmail token refresh failed:', err);
@@ -138,7 +142,7 @@ export async function fetchRecentSentEmails(
 ): Promise<SentEmail[] | null> {
   if (isBlank(opts.accessToken)) return null;
   const limit = opts.limit ?? 20;
-  const headers = { 'Authorization': `Bearer ${opts.accessToken}` };
+  const headers = { Authorization: `Bearer ${opts.accessToken}` };
 
   try {
     const listRes = await fetchWithTimeout(
@@ -150,7 +154,7 @@ export async function fetchRecentSentEmails(
       console.error('[SIGNAL] Gmail list failed:', listRes.status);
       return null;
     }
-    const list = await listRes.json() as { messages?: Array<{ id: string }> };
+    const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
     if (!list.messages) return [];
 
     const results: SentEmail[] = [];
@@ -161,7 +165,7 @@ export async function fetchRecentSentEmails(
         TIMEOUT_MS,
       );
       if (!msgRes.ok) continue;
-      const msg = await msgRes.json() as GmailMessage;
+      const msg = (await msgRes.json()) as GmailMessage;
       const subject = extractHeader(msg.payload, 'Subject');
       const body = extractBody(msg.payload);
       const sentAt = msg.internalDate ? Number(msg.internalDate) : 0;

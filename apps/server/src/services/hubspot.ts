@@ -44,9 +44,12 @@ function htmlList(items: string[]): string {
 
 function buildBodyHtml(summary: PostCallSummary): string {
   return [
-    '<h3>Win signals</h3>', htmlList(summary.winSignals),
-    '<h3>Objections</h3>', htmlList(summary.objections),
-    '<h3>Decisions</h3>', htmlList(summary.decisions),
+    '<h3>Win signals</h3>',
+    htmlList(summary.winSignals),
+    '<h3>Objections</h3>',
+    htmlList(summary.objections),
+    '<h3>Decisions</h3>',
+    htmlList(summary.decisions),
     '<h3>Follow-up draft</h3>',
     `<pre>${escapeHtml(summary.followUpDraft)}</pre>`,
   ].join('');
@@ -63,25 +66,31 @@ export async function findOrCreateContact(
   if (isPlaceholder(opts.apiKey)) return null;
   const { apiKey, prospect } = opts;
   const headers = {
-    'Authorization': `Bearer ${apiKey}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
 
   try {
     // Search by email first when available.
     if (prospect.email) {
-      const res = await fetchWithTimeout(`${BASE_URL}/crm/v3/objects/contacts/search`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          filterGroups: [{
-            filters: [{ propertyName: 'email', operator: 'EQ', value: prospect.email }],
-          }],
-          limit: 1,
-        }),
-      }, TIMEOUT_MS);
+      const res = await fetchWithTimeout(
+        `${BASE_URL}/crm/v3/objects/contacts/search`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            filterGroups: [
+              {
+                filters: [{ propertyName: 'email', operator: 'EQ', value: prospect.email }],
+              },
+            ],
+            limit: 1,
+          }),
+        },
+        TIMEOUT_MS,
+      );
       if (res.ok) {
-        const data = await res.json() as { results?: Array<{ id: string }> };
+        const data = (await res.json()) as { results?: Array<{ id: string }> };
         if (data.results && data.results.length > 0 && data.results[0]?.id) {
           return { hubspotId: data.results[0].id };
         }
@@ -95,17 +104,21 @@ export async function findOrCreateContact(
     if (prospect.email) properties.email = prospect.email;
     if (prospect.company) properties.company = prospect.company;
 
-    const createRes = await fetchWithTimeout(`${BASE_URL}/crm/v3/objects/contacts`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ properties }),
-    }, TIMEOUT_MS);
+    const createRes = await fetchWithTimeout(
+      `${BASE_URL}/crm/v3/objects/contacts`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ properties }),
+      },
+      TIMEOUT_MS,
+    );
     if (!createRes.ok) {
       const body = await createRes.text().catch(() => '');
       console.error('[SIGNAL] HubSpot contact create failed:', createRes.status, body);
       return null;
     }
-    const created = await createRes.json() as { id?: string };
+    const created = (await createRes.json()) as { id?: string };
     return created.id ? { hubspotId: created.id } : null;
   } catch (err) {
     console.error('[SIGNAL] HubSpot findOrCreateContact failed:', err);
@@ -127,7 +140,7 @@ export async function writeCallEngagement(
 ): Promise<{ engagementId: string } | null> {
   if (isPlaceholder(opts.apiKey)) return null;
   const headers = {
-    'Authorization': `Bearer ${opts.apiKey}`,
+    Authorization: `Bearer ${opts.apiKey}`,
     'Content-Type': 'application/json',
   };
 
@@ -140,26 +153,34 @@ export async function writeCallEngagement(
   };
 
   try {
-    const res = await fetchWithTimeout(`${BASE_URL}/crm/v3/objects/calls`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        properties,
-        associations: [{
-          to: { id: opts.hubspotContactId },
-          types: [{
-            associationCategory: 'HUBSPOT_DEFINED',
-            associationTypeId: ASSOC_CALL_TO_CONTACT,
-          }],
-        }],
-      }),
-    }, TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      `${BASE_URL}/crm/v3/objects/calls`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          properties,
+          associations: [
+            {
+              to: { id: opts.hubspotContactId },
+              types: [
+                {
+                  associationCategory: 'HUBSPOT_DEFINED',
+                  associationTypeId: ASSOC_CALL_TO_CONTACT,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      TIMEOUT_MS,
+    );
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       console.error('[SIGNAL] HubSpot call engagement create failed:', res.status, body);
       return null;
     }
-    const data = await res.json() as { id?: string };
+    const data = (await res.json()) as { id?: string };
     return data.id ? { engagementId: data.id } : null;
   } catch (err) {
     console.error('[SIGNAL] HubSpot writeCallEngagement failed:', err);

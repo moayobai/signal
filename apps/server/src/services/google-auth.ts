@@ -7,7 +7,11 @@
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_OAUTH_TIMEOUT_MS = 10_000;
 
-export async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  ms: number,
+): Promise<Response> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), ms);
   try {
@@ -41,17 +45,21 @@ export async function refreshGoogleAccessToken(
       refresh_token: opts.refreshToken,
       grant_type: 'refresh_token',
     });
-    const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }, GOOGLE_OAUTH_TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      GOOGLE_TOKEN_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+      GOOGLE_OAUTH_TIMEOUT_MS,
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       console.error(`[SIGNAL] ${label} token refresh failed:`, res.status, txt);
       return null;
     }
-    const data = await res.json() as { access_token?: string };
+    const data = (await res.json()) as { access_token?: string };
     return data.access_token ?? null;
   } catch (err) {
     console.error(`[SIGNAL] ${label} token refresh failed:`, err);

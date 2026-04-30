@@ -17,7 +17,9 @@ describe('generateSummary', () => {
   it('parses valid JSON into PostCallSummary', async () => {
     const ai = { complete: async () => VALID_JSON };
     const res = await generateSummary({
-      ai, model: 'claude-sonnet-4-6', callType: 'investor',
+      ai,
+      model: 'claude-sonnet-4-6',
+      callType: 'investor',
       transcript: [{ speaker: 'user', text: 'Hello', timestamp: 1 }],
     });
     expect(res?.winSignals).toEqual(['Asked about Series A']);

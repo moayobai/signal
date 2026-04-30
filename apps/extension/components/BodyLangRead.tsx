@@ -8,32 +8,32 @@ interface BodyLangReadProps {
 type BadgeVariant = 'green' | 'cyan' | 'amber' | 'red' | 'neutral';
 
 const engagementVariant: Record<BodyLangReadType['engagement'], BadgeVariant> = {
-  strong:   'green',
-  active:   'cyan',
+  strong: 'green',
+  active: 'cyan',
   moderate: 'neutral',
-  low:      'amber',
+  low: 'amber',
 };
 
 const energyVariant: Record<BodyLangReadType['energy'], BadgeVariant> = {
-  high:      'green',
-  rising:    'cyan',
-  neutral:   'neutral',
+  high: 'green',
+  rising: 'cyan',
+  neutral: 'neutral',
   declining: 'amber',
 };
 
 const toneVariant: Record<BodyLangReadType['tone'], BadgeVariant> = {
-  positive:  'green',
-  curious:   'cyan',
-  neutral:   'neutral',
-  hesitant:  'amber',
+  positive: 'green',
+  curious: 'cyan',
+  neutral: 'neutral',
+  hesitant: 'amber',
   resistant: 'red',
 };
 
 const badgeStyles: Record<BadgeVariant, string> = {
-  green:   'bg-[rgba(48,209,88,0.12)] text-[#1a8c3a]',
-  cyan:    'bg-[rgba(50,200,230,0.12)] text-[#0077a8]',
-  amber:   'bg-[rgba(255,159,10,0.12)] text-[#b06000]',
-  red:     'bg-[rgba(255,69,58,0.12)] text-[#c0392b]',
+  green: 'bg-[rgba(48,209,88,0.12)] text-[#1a8c3a]',
+  cyan: 'bg-[rgba(50,200,230,0.12)] text-[#0077a8]',
+  amber: 'bg-[rgba(255,159,10,0.12)] text-[#b06000]',
+  red: 'bg-[rgba(255,69,58,0.12)] text-[#c0392b]',
   neutral: 'bg-black/[0.05] text-[--text-secondary]',
 };
 

@@ -73,7 +73,9 @@ export function createHumeClient(opts: HumeClientOptions): HumeHandle {
       if (!best.emotions?.length) return;
 
       const sorted = [...best.emotions].sort((a, b) => b.score - a.score);
-      const top3 = sorted.slice(0, 3).map(e => ({ name: e.name, score: Math.round(e.score * 100) / 100 }));
+      const top3 = sorted
+        .slice(0, 3)
+        .map(e => ({ name: e.name, score: Math.round(e.score * 100) / 100 }));
 
       const signals: FaceSignals = {
         topEmotions: top3,
@@ -87,7 +89,7 @@ export function createHumeClient(opts: HumeClientOptions): HumeHandle {
     }
   });
 
-  ws.on('error', (err) => {
+  ws.on('error', err => {
     console.error('[SIGNAL] Hume WS error:', err);
     opts.onError?.(err);
   });
@@ -98,10 +100,12 @@ export function createHumeClient(opts: HumeClientOptions): HumeHandle {
 
   function _send(base64Jpeg: string): void {
     if (ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({
-      models: { face: { identify_faces: false, prob_threshold: 0.8 } },
-      data: base64Jpeg,
-    }));
+    ws.send(
+      JSON.stringify({
+        models: { face: { identify_faces: false, prob_threshold: 0.8 } },
+        data: base64Jpeg,
+      }),
+    );
   }
 
   return {
