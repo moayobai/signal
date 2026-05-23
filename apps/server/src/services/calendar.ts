@@ -11,6 +11,7 @@
  */
 
 import { fetchWithTimeout, isBlank, refreshGoogleAccessToken } from './google-auth.js';
+import { refreshMicrosoftAccessToken } from './microsoft-auth.js';
 
 const API_TIMEOUT_MS = 10_000;
 
@@ -207,47 +208,17 @@ function parseOutlookTime(t: { dateTime?: string; timeZone?: string } | undefine
   return Date.parse(s);
 }
 
-async function refreshOutlookAccessToken(cfg: OutlookCalendarConfig): Promise<string | null> {
-  if (isBlank(cfg.clientId) || isBlank(cfg.clientSecret) || isBlank(cfg.refreshToken)) {
-    return null;
-  }
-  const tenant = cfg.tenantId && cfg.tenantId.trim() !== '' ? cfg.tenantId : 'common';
-  const url = `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`;
-  try {
-    const body = new URLSearchParams({
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
-      refresh_token: cfg.refreshToken,
-      grant_type: 'refresh_token',
-      scope: 'https://graph.microsoft.com/Calendars.Read offline_access',
-    });
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      },
-      API_TIMEOUT_MS,
-    );
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      console.error('[SIGNAL] Outlook token refresh failed:', res.status, txt);
-      return null;
-    }
-    const data = (await res.json()) as { access_token?: string };
-    return data.access_token ?? null;
-  } catch (err) {
-    console.error('[SIGNAL] Outlook token refresh failed:', err);
-    return null;
-  }
-}
-
 class OutlookCalendarProvider implements CalendarProvider {
   constructor(private readonly cfg: OutlookCalendarConfig) {}
 
   async getUpcomingEvents(windowMs: number): Promise<CalendarEvent[]> {
-    const accessToken = await refreshOutlookAccessToken(this.cfg);
+    const accessToken = await refreshMicrosoftAccessToken(
+      {
+        ...this.cfg,
+        scope: 'https://graph.microsoft.com/Calendars.Read offline_access',
+      },
+      'Outlook Calendar',
+    );
     if (!accessToken) return [];
 
     const now = Date.now();

@@ -13,6 +13,14 @@ const deepgramMock = vi.hoisted(() => ({
 const summaryMock = vi.hoisted(() => ({
   generateSummary: vi.fn(),
 }));
+const gmailMock = vi.hoisted(() => ({
+  refreshAccessToken: vi.fn(),
+  fetchRecentSentEmails: vi.fn(),
+}));
+const outlookMock = vi.hoisted(() => ({
+  refreshOutlookAccessToken: vi.fn(),
+  fetchRecentOutlookSentEmails: vi.fn(),
+}));
 
 vi.mock('../services/deepgram.js', () => ({
   createDeepgramClient: vi.fn(options => {
@@ -34,13 +42,33 @@ vi.mock('../services/octamem.js', () => ({
 vi.mock('../services/summary.js', () => ({
   generateSummary: summaryMock.generateSummary,
 }));
+vi.mock('../services/gmail.js', () => ({
+  refreshAccessToken: gmailMock.refreshAccessToken,
+  fetchRecentSentEmails: gmailMock.fetchRecentSentEmails,
+}));
+vi.mock('../services/outlook.js', () => ({
+  refreshOutlookAccessToken: outlookMock.refreshOutlookAccessToken,
+  fetchRecentOutlookSentEmails: outlookMock.fetchRecentOutlookSentEmails,
+}));
 
 import { registerWsRoute } from './ws.js';
 import { initDb, callSessions, contacts, transcriptLines, callSummaries } from '../services/db.js';
 import { NoOpProvider } from '../services/ai.js';
 import { registerSecurity } from '../services/security.js';
 
-async function buildApp(options: { auth?: boolean; maxMessageBytes?: number } = {}) {
+async function buildApp(
+  options: {
+    auth?: boolean;
+    maxMessageBytes?: number;
+    gmail?: { clientId: string; clientSecret: string; refreshToken: string };
+    outlook?: {
+      clientId: string;
+      clientSecret: string;
+      refreshToken: string;
+      tenantId?: string;
+    };
+  } = {},
+) {
   const app = Fastify({ logger: false });
   if (options.auth) {
     await registerSecurity(app, {
@@ -64,6 +92,8 @@ async function buildApp(options: { auth?: boolean; maxMessageBytes?: number } = 
     summaryModel: 'claude-sonnet-4-6',
     scoringFramework: 'MEDDIC',
     maxMessageBytes: options.maxMessageBytes,
+    gmail: options.gmail,
+    outlook: options.outlook,
   });
   await app.ready();
   return { app, db };
@@ -86,6 +116,10 @@ describe('WebSocket route', () => {
     deepgramMock.finish.mockReset();
     summaryMock.generateSummary.mockReset();
     summaryMock.generateSummary.mockResolvedValue(null);
+    gmailMock.refreshAccessToken.mockReset();
+    gmailMock.fetchRecentSentEmails.mockReset();
+    outlookMock.refreshOutlookAccessToken.mockReset();
+    outlookMock.fetchRecentOutlookSentEmails.mockReset();
     built = await buildApp();
     app = built.app;
     const listen = await app.listen({ port: 0 });
@@ -176,6 +210,65 @@ describe('WebSocket route', () => {
     expect(sessions[0].endedAt).toBeTypeOf('number');
     expect(built.db.select().from(transcriptLines).all()).toHaveLength(1);
     expect(built.db.select().from(callSummaries).all()).toHaveLength(1);
+    ws.close();
+  });
+
+  it('passes Gmail and Outlook voice samples into post-call summary generation', async () => {
+    await app.close();
+    gmailMock.refreshAccessToken.mockResolvedValue('gmail-access');
+    gmailMock.fetchRecentSentEmails.mockResolvedValue([
+      { subject: 'Gmail newer', body: 'Gmail tone.', sentAt: 200 },
+    ]);
+    outlookMock.refreshOutlookAccessToken.mockResolvedValue('outlook-access');
+    outlookMock.fetchRecentOutlookSentEmails.mockResolvedValue([
+      { subject: 'Outlook newest', body: 'Outlook tone.', sentAt: 300 },
+      { subject: 'Outlook older', body: 'Older tone.', sentAt: 100 },
+    ]);
+    summaryMock.generateSummary.mockResolvedValue({
+      winSignals: [],
+      objections: [],
+      decisions: [],
+      followUpDraft: 'Thanks for the call.',
+    });
+    built = await buildApp({
+      gmail: {
+        clientId: 'gmail-client',
+        clientSecret: 'gmail-secret',
+        refreshToken: 'gmail-refresh',
+      },
+      outlook: {
+        clientId: 'outlook-client',
+        clientSecret: 'outlook-secret',
+        refreshToken: 'outlook-refresh',
+        tenantId: 'common',
+      },
+    });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+
+    const ws = await connectAndDrainConnected(address);
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'enterprise',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
+    await new Promise(r => setTimeout(r, 100));
+    ws.send(JSON.stringify({ type: 'stop' }));
+    await new Promise(r => setTimeout(r, 150));
+
+    expect(summaryMock.generateSummary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voiceSamples: [
+          { subject: 'Outlook newest', body: 'Outlook tone.' },
+          { subject: 'Gmail newer', body: 'Gmail tone.' },
+          { subject: 'Outlook older', body: 'Older tone.' },
+        ],
+      }),
+    );
     ws.close();
   });
 

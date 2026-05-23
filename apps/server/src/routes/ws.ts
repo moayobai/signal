@@ -11,7 +11,8 @@ import { generateScorecard } from '../services/scorecard.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
 import { postCallSummaryToSlack } from '../services/slack.js';
 import { findOrCreateContact, writeCallEngagement } from '../services/hubspot.js';
-import { fetchRecentSentEmails, refreshAccessToken } from '../services/gmail.js';
+import { fetchRecentSentEmails, refreshAccessToken, type SentEmail } from '../services/gmail.js';
+import { fetchRecentOutlookSentEmails, refreshOutlookAccessToken } from '../services/outlook.js';
 import {
   contacts,
   callSessions,
@@ -65,6 +66,12 @@ export interface WsRouteOptions {
     clientId: string;
     clientSecret: string;
     refreshToken: string;
+  };
+  outlook?: {
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+    tenantId?: string;
   };
 }
 
@@ -260,7 +267,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           console.error('[SIGNAL] failed to update call session:', err);
         }
 
-        const voiceSamples = await loadVoiceSamples(opts.gmail);
+        const voiceSamples = await loadVoiceSamples({ gmail: opts.gmail, outlook: opts.outlook });
         const summary = await generateSummary({
           ai: opts.ai,
           model: opts.summaryModel,
@@ -559,19 +566,49 @@ function computeTalkRatio(lines: TranscriptLine[]): TalkRatioStats {
   return { userWords, prospectWords, talkRatio, longestMonologueMs };
 }
 
-async function loadVoiceSamples(
-  gmail: WsRouteOptions['gmail'],
-): Promise<Array<{ subject: string; body: string }> | null> {
-  if (!gmail?.clientId || !gmail.clientSecret || !gmail.refreshToken) return null;
+async function loadGmailVoiceSamples(gmail: WsRouteOptions['gmail']): Promise<SentEmail[]> {
+  if (!gmail?.clientId || !gmail.clientSecret || !gmail.refreshToken) return [];
   const accessToken = await refreshAccessToken({
     clientId: gmail.clientId,
     clientSecret: gmail.clientSecret,
     refreshToken: gmail.refreshToken,
   });
-  if (!accessToken) return null;
-  const samples = await fetchRecentSentEmails({ accessToken, limit: 8 });
-  if (!samples || samples.length === 0) return null;
-  return samples.map(({ subject, body }) => ({ subject, body }));
+  if (!accessToken) return [];
+  return (await fetchRecentSentEmails({ accessToken, limit: 8 })) ?? [];
+}
+
+async function loadOutlookVoiceSamples(outlook: WsRouteOptions['outlook']): Promise<SentEmail[]> {
+  if (!outlook?.clientId || !outlook.clientSecret || !outlook.refreshToken) return [];
+  const accessToken = await refreshOutlookAccessToken({
+    clientId: outlook.clientId,
+    clientSecret: outlook.clientSecret,
+    refreshToken: outlook.refreshToken,
+    tenantId: outlook.tenantId,
+  });
+  if (!accessToken) return [];
+  return (await fetchRecentOutlookSentEmails({ accessToken, limit: 8 })) ?? [];
+}
+
+async function loadVoiceSamples(providers: {
+  gmail?: WsRouteOptions['gmail'];
+  outlook?: WsRouteOptions['outlook'];
+}): Promise<Array<{ subject: string; body: string }> | null> {
+  const [gmailSamples, outlookSamples] = await Promise.all([
+    loadGmailVoiceSamples(providers.gmail).catch(err => {
+      console.error('[SIGNAL] Gmail voice samples failed:', err);
+      return [] as SentEmail[];
+    }),
+    loadOutlookVoiceSamples(providers.outlook).catch(err => {
+      console.error('[SIGNAL] Outlook voice samples failed:', err);
+      return [] as SentEmail[];
+    }),
+  ]);
+  const samples = [...gmailSamples, ...outlookSamples]
+    .filter(sample => sample.body.trim())
+    .sort((a, b) => b.sentAt - a.sentAt)
+    .slice(0, 8)
+    .map(({ subject, body }) => ({ subject, body }));
+  return samples.length > 0 ? samples : null;
 }
 
 function persistFrame(db: DB, sessionId: string, frame: SignalFrame): void {

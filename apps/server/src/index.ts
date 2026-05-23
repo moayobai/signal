@@ -8,16 +8,18 @@ import { dirname, join } from 'node:path';
 import { registerWsRoute } from './routes/ws.js';
 import { registerApiRoutes } from './routes/api.js';
 import { initDb } from './services/db.js';
-import { createAIProvider } from './services/ai.js';
+import { createAIProvider, type AIProviderName } from './services/ai.js';
 import { createCalendarProvider } from './services/calendar.js';
 import { startCalendarPoller } from './services/calendar-poller.js';
 import { registerSecurity } from './services/security.js';
 import type { CallFramework } from '@signal/types';
 
 const PORT = Number(process.env.PORT ?? 8080);
-const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'claude') as 'claude' | 'openrouter';
+const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'claude') as AIProviderName;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? 'sk-ant-your-key-here';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? 'sk-or-your-key-here';
+const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY ?? 'together-your-key-here';
+const TOGETHER_BASE_URL = process.env.TOGETHER_BASE_URL ?? 'https://api.together.ai/v1';
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY ?? 'your-deepgram-key-here';
 const DEEPGRAM_MODEL = process.env.DEEPGRAM_MODEL ?? 'nova-3';
 const OCTAMEM_API_KEY = process.env.OCTAMEM_API_KEY ?? 'your-octamem-key-here';
@@ -27,8 +29,12 @@ const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL ?? 'your-slack-webhook-u
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY ?? 'your-hubspot-key-here';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? '';
 const DATABASE_URL = process.env.DATABASE_URL ?? './signal.db';
-const LIVE_MODEL = process.env.LIVE_MODEL ?? 'claude-haiku-4-5-20251001';
-const SUMMARY_MODEL = process.env.SUMMARY_MODEL ?? 'claude-sonnet-4-6';
+const LIVE_MODEL =
+  process.env.LIVE_MODEL ??
+  (AI_PROVIDER === 'together' ? 'openai/gpt-oss-20b' : 'claude-haiku-4-5-20251001');
+const SUMMARY_MODEL =
+  process.env.SUMMARY_MODEL ??
+  (AI_PROVIDER === 'together' ? 'openai/gpt-oss-20b' : 'claude-sonnet-4-6');
 const SCORING_FRAMEWORK = (process.env.SCORING_FRAMEWORK ?? 'MEDDIC') as CallFramework;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -96,6 +102,8 @@ const ai = createAIProvider({
   provider: AI_PROVIDER,
   anthropicApiKey: ANTHROPIC_API_KEY,
   openrouterApiKey: OPENROUTER_API_KEY,
+  togetherApiKey: TOGETHER_API_KEY,
+  togetherBaseUrl: TOGETHER_BASE_URL,
 });
 
 await registerSecurity(app, {
@@ -142,6 +150,12 @@ registerWsRoute(app, {
     clientId: GMAIL_CLIENT_ID,
     clientSecret: GMAIL_CLIENT_SECRET,
     refreshToken: GMAIL_REFRESH_TOKEN,
+  },
+  outlook: {
+    clientId: OUTLOOK_CLIENT_ID,
+    clientSecret: OUTLOOK_CLIENT_SECRET,
+    refreshToken: OUTLOOK_REFRESH_TOKEN,
+    tenantId: OUTLOOK_TENANT_ID,
   },
 });
 registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY, voyageApiKey: VOYAGE_API_KEY });
@@ -201,6 +215,9 @@ try {
   }
   if (AI_PROVIDER === 'openrouter' && OPENROUTER_API_KEY.startsWith('sk-or-your-key')) {
     app.log.warn('[SIGNAL] OPENROUTER_API_KEY is placeholder — AI disabled');
+  }
+  if (AI_PROVIDER === 'together' && TOGETHER_API_KEY.startsWith('together-your-key')) {
+    app.log.warn('[SIGNAL] TOGETHER_API_KEY is placeholder — AI disabled');
   }
   if (DEEPGRAM_API_KEY.startsWith('your-deepgram'))
     app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
