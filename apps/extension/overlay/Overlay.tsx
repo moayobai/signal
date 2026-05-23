@@ -41,6 +41,7 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
   const [snoozeUntil, setSnoozeUntil] = useState(0);
   /** Type of the last frame for which a nudge was rendered — prevents re-animation churn. */
   const [lastAnimatedType, setLastAnimatedType] = useState<string | null>(null);
+  const startedAtRef = useRef<number | null>(null);
 
   // Global Escape key: dismiss nudge + snooze for 5s
   useEffect(() => {
@@ -72,6 +73,23 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
     setPostCallSummary,
     useMockFixture,
   ]);
+
+  useEffect(() => {
+    const active = overlayState === 'LIVE' || overlayState === 'DANGER';
+    if (!active) {
+      startedAtRef.current = null;
+      if (overlayState === 'IDLE') setElapsedSeconds(0);
+      return;
+    }
+    if (startedAtRef.current === null) startedAtRef.current = Date.now();
+    const tick = () => {
+      const startedAt = startedAtRef.current ?? Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [overlayState, setElapsedSeconds]);
 
   // Re-show the nudge card whenever a new frame version arrives —
   // but skip if we're still within the snooze window.

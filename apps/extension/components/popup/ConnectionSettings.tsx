@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   DEFAULT_SIGNAL_SERVER_URL,
+  normalizeServerUrl,
+  serverOriginPattern,
   type SignalConnectionConfig,
   writeSignalConnectionConfig,
 } from '../../lib/connectionConfig';
@@ -22,6 +24,13 @@ export function ConnectionSettings({ config, onChange }: Props) {
 
   async function save(): Promise<void> {
     try {
+      const normalizedServerUrl = normalizeServerUrl(serverUrl);
+      const origin = serverOriginPattern(normalizedServerUrl);
+      const granted = await chrome.permissions.contains({ origins: [origin] });
+      if (!granted) {
+        const approved = await chrome.permissions.request({ origins: [origin] });
+        if (!approved) throw new Error('Server permission denied');
+      }
       const next = await writeSignalConnectionConfig({ serverUrl, authToken });
       onChange(next);
       setStatus('saved');

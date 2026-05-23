@@ -33,5 +33,12 @@
   "engines": {
     "node": ">=20"
   },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": "^5.0.6",
+      "fast-uri": "^3.1.2",
+      "ws": "^8.20.1"
+    }
+  },
   "packageManager": "pnpm@9.15.9"
 }

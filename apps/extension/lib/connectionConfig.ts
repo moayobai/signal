@@ -42,6 +42,20 @@ export function authHeaders(authToken: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function base64UrlEncode(value: string): string {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+export function authenticatedWsProtocols(authToken: string): string[] {
+  const token = authToken.trim();
+  return token ? [`signal-token.${base64UrlEncode(token)}`] : [];
+}
+
+export function serverOriginPattern(serverUrl: string): string {
+  const url = new URL(normalizeServerUrl(serverUrl));
+  return `${url.origin}/*`;
+}
+
 export function authenticatedWsUrl(wsUrl: string, authToken: string): string {
   const token = authToken.trim();
   if (!token) return wsUrl;

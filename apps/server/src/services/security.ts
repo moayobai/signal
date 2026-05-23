@@ -30,6 +30,9 @@ function tokenFromRequest(req: FastifyRequest): string | null {
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) return auth.slice('Bearer '.length).trim();
 
+  const wsProtocolToken = tokenFromWebSocketProtocol(req.headers['sec-websocket-protocol']);
+  if (wsProtocolToken) return wsProtocolToken;
+
   const headerToken = req.headers['x-signal-token'];
   if (typeof headerToken === 'string') return headerToken.trim();
 
@@ -37,6 +40,27 @@ function tokenFromRequest(req: FastifyRequest): string | null {
   if (typeof queryToken === 'string') return queryToken.trim();
 
   return parseCookie(req.headers.cookie)[AUTH_COOKIE] ?? null;
+}
+
+function base64UrlDecode(value: string): string | null {
+  const normalised = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalised.padEnd(normalised.length + ((4 - (normalised.length % 4)) % 4), '=');
+  try {
+    return Buffer.from(padded, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function tokenFromWebSocketProtocol(header: string | string[] | undefined): string | null {
+  const raw = Array.isArray(header) ? header.join(',') : header;
+  if (!raw) return null;
+  for (const part of raw.split(',')) {
+    const protocol = part.trim();
+    if (!protocol.startsWith('signal-token.')) continue;
+    return base64UrlDecode(protocol.slice('signal-token.'.length));
+  }
+  return null;
 }
 
 function safeTokenEqual(a: string, b: string): boolean {

@@ -30,7 +30,8 @@ const DB_PATH = resolve(SERVER_CWD, 'signal.db');
 const PORT = Number(process.env.E2E_PORT ?? 18080);
 const BASE = `http://localhost:${PORT}`;
 const AUTH_TOKEN = 'signal-e2e-token';
-const WS_URL = `ws://localhost:${PORT}/ws?token=${encodeURIComponent(AUTH_TOKEN)}`;
+const WS_URL = `ws://localhost:${PORT}/ws`;
+const WS_PROTOCOL = `signal-token.${Buffer.from(AUTH_TOKEN, 'utf8').toString('base64url')}`;
 
 let serverProc: ChildProcess | null = null;
 const results: Array<{ step: string; ok: boolean; detail?: string }> = [];
@@ -189,7 +190,7 @@ interface WSTranscript {
 async function runWsSession(prospect: { name: string; company?: string }): Promise<WSTranscript> {
   const transcript: WSTranscript = { received: [], errors: [], closed: false };
 
-  const ws = new WebSocket(WS_URL);
+  const ws = new WebSocket(WS_URL, WS_PROTOCOL);
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve());
     ws.once('error', reject);

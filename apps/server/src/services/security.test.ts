@@ -43,6 +43,18 @@ describe('security', () => {
     await app.close();
   });
 
+  it('accepts websocket auth subprotocol tokens on protected routes', async () => {
+    const app = await buildSecuredApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/private',
+      headers: { 'sec-websocket-protocol': 'signal-token.dGVzdC10b2tlbg' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    await app.close();
+  });
+
   it('sets an auth cookie when the query token is valid', async () => {
     const app = await buildSecuredApp();
     const res = await app.inject({ method: 'GET', url: '/api/private?token=test-token' });

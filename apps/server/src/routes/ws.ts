@@ -11,6 +11,7 @@ import { generateScorecard } from '../services/scorecard.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
 import { postCallSummaryToSlack } from '../services/slack.js';
 import { findOrCreateContact, writeCallEngagement } from '../services/hubspot.js';
+import { fetchRecentSentEmails, refreshAccessToken } from '../services/gmail.js';
 import {
   contacts,
   callSessions,
@@ -60,6 +61,11 @@ export interface WsRouteOptions {
   scoringFramework: CallFramework;
   publicBaseUrl?: string;
   maxMessageBytes?: number;
+  gmail?: {
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  };
 }
 
 export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): void {
@@ -254,11 +260,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           console.error('[SIGNAL] failed to update call session:', err);
         }
 
+        const voiceSamples = await loadVoiceSamples(opts.gmail);
         const summary = await generateSummary({
           ai: opts.ai,
           model: opts.summaryModel,
           callType,
           transcript: collectedTranscript,
+          voiceSamples: voiceSamples ?? undefined,
         });
 
         if (summary) {
@@ -549,6 +557,21 @@ function computeTalkRatio(lines: TranscriptLine[]): TalkRatioStats {
   }
 
   return { userWords, prospectWords, talkRatio, longestMonologueMs };
+}
+
+async function loadVoiceSamples(
+  gmail: WsRouteOptions['gmail'],
+): Promise<Array<{ subject: string; body: string }> | null> {
+  if (!gmail?.clientId || !gmail.clientSecret || !gmail.refreshToken) return null;
+  const accessToken = await refreshAccessToken({
+    clientId: gmail.clientId,
+    clientSecret: gmail.clientSecret,
+    refreshToken: gmail.refreshToken,
+  });
+  if (!accessToken) return null;
+  const samples = await fetchRecentSentEmails({ accessToken, limit: 8 });
+  if (!samples || samples.length === 0) return null;
+  return samples.map(({ subject, body }) => ({ subject, body }));
 }
 
 function persistFrame(db: DB, sessionId: string, frame: SignalFrame): void {

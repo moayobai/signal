@@ -32,9 +32,9 @@ test('browser websocket start and stop persists a complete call shell', async ({
   const sessionId = await page.evaluate(async token => {
     const wsUrl = new URL('/ws', window.location.href);
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-    wsUrl.searchParams.set('token', token);
+    const protocol = `signal-token.${btoa(token).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')}`;
 
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl, protocol);
     const connected = await new Promise<{ sessionId: string }>((resolve, reject) => {
       const timer = window.setTimeout(
         () => reject(new Error('Timed out waiting for connected')),

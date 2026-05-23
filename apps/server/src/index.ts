@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
+import type { FastifyServerOptions } from 'fastify';
 import websocketPlugin from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +33,9 @@ const SCORING_FRAMEWORK = (process.env.SCORING_FRAMEWORK ?? 'MEDDIC') as CallFra
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_REFRESH_TOKEN_CALENDAR = process.env.GOOGLE_REFRESH_TOKEN_CALENDAR ?? '';
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET ?? '';
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN ?? '';
 const OUTLOOK_CLIENT_ID = process.env.OUTLOOK_CLIENT_ID ?? '';
 const OUTLOOK_CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET ?? '';
 const OUTLOOK_REFRESH_TOKEN = process.env.OUTLOOK_REFRESH_TOKEN ?? '';
@@ -46,8 +50,41 @@ const SIGNAL_DB_BACKUP_DIR = process.env.SIGNAL_DB_BACKUP_DIR ?? '';
 const SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS =
   process.env.SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS !== 'false';
 
+function redactSensitiveUrl(url: string): string {
+  try {
+    const parsed = new URL(url, 'http://signal.local');
+    if (parsed.searchParams.has('token')) parsed.searchParams.set('token', '[redacted]');
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return url.replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
+  }
+}
+
+const logger: FastifyServerOptions['logger'] = {
+  ...(process.env.NODE_ENV === 'production'
+    ? {}
+    : { transport: { target: 'pino-pretty', options: { colorize: true } } }),
+  serializers: {
+    req(req: {
+      method?: string;
+      url?: string;
+      headers?: Record<string, unknown>;
+      socket?: { remoteAddress?: string; remotePort?: number };
+    }) {
+      return {
+        method: req.method,
+        url: redactSensitiveUrl(req.url ?? ''),
+        host: typeof req.headers?.host === 'string' ? req.headers.host : undefined,
+        remoteAddress: req.socket?.remoteAddress,
+        remotePort: req.socket?.remotePort,
+      };
+    },
+  },
+  redact: ['req.headers.authorization', 'req.headers.cookie'],
+};
+
 const app = Fastify({
-  logger: { transport: { target: 'pino-pretty', options: { colorize: true } } },
+  logger,
   bodyLimit: SIGNAL_BODY_LIMIT_BYTES,
 });
 
@@ -101,6 +138,11 @@ registerWsRoute(app, {
   scoringFramework: SCORING_FRAMEWORK,
   publicBaseUrl: PUBLIC_BASE_URL || undefined,
   maxMessageBytes: SIGNAL_WS_MAX_MESSAGE_BYTES,
+  gmail: {
+    clientId: GMAIL_CLIENT_ID,
+    clientSecret: GMAIL_CLIENT_SECRET,
+    refreshToken: GMAIL_REFRESH_TOKEN,
+  },
 });
 registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY, voyageApiKey: VOYAGE_API_KEY });
 

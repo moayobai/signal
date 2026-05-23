@@ -69,9 +69,9 @@ async function buildApp(options: { auth?: boolean; maxMessageBytes?: number } = 
   return { app, db };
 }
 
-function connectAndDrainConnected(address: string): Promise<WebSocket> {
+function connectAndDrainConnected(address: string, protocols?: string[]): Promise<WebSocket> {
   return new Promise(resolve => {
-    const ws = new WebSocket(address);
+    const ws = new WebSocket(address, protocols);
     ws.once('message', () => resolve(ws));
   });
 }
@@ -185,6 +185,17 @@ describe('WebSocket route', () => {
     app = built.app;
     const res = await app.inject({ method: 'GET', url: '/ws' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts websocket auth through subprotocol token', async () => {
+    await app.close();
+    built = await buildApp({ auth: true });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+    const ws = await connectAndDrainConnected(address, ['signal-token.dGVzdC10b2tlbg']);
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    ws.close();
   });
 
   it('closes oversized websocket messages', async () => {

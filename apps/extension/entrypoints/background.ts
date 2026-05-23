@@ -2,7 +2,7 @@ import type { ClientMessage, ServerMessage, Prospect, CallType } from '@signal/t
 import { shouldReconnectAfterClose, stopMediaStreamTracks } from '../lib/captureLifecycle';
 import {
   authHeaders,
-  authenticatedWsUrl,
+  authenticatedWsProtocols,
   DEFAULT_SIGNAL_SERVER_URL,
   readSignalConnectionConfig,
   type SignalConnectionConfig,
@@ -16,20 +16,39 @@ const WS_URL = (typeof __WS_URL__ !== 'undefined' ? __WS_URL__ : 'ws://localhost
 const SIGNAL_AUTH_TOKEN = typeof __SIGNAL_AUTH_TOKEN__ !== 'undefined' ? __SIGNAL_AUTH_TOKEN__ : '';
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAYS = [1000, 2000, 4000] as const;
+const STOP_SUMMARY_TIMEOUT_MS = 15_000;
 
 let wsocket: WebSocket | null = null;
 let recorder: MediaRecorder | null = null;
 let frameInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingStopCloseTimer: ReturnType<typeof setTimeout> | null = null;
 let activeStream: MediaStream | null = null;
 let activeTabId: number | null = null;
 let reconnectAttempt = 0;
 let intentionalStop = false;
+let captureState: 'idle' | 'starting' | 'active' | 'stopping' = 'idle';
 
 const DEFAULT_CONNECTION: SignalConnectionConfig = {
   serverUrl: DEFAULT_SIGNAL_SERVER_URL,
   authToken: SIGNAL_AUTH_TOKEN,
 };
+
+function isProspect(value: unknown): value is Prospect {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
+}
+
+function isCallType(value: unknown): value is CallType {
+  return value === 'investor' || value === 'enterprise' || value === 'bd' || value === 'customer';
+}
+
+function isPlatform(value: unknown): value is 'meet' | 'zoom' | 'teams' {
+  return value === 'meet' || value === 'zoom' || value === 'teams';
+}
 
 try {
   DEFAULT_CONNECTION.serverUrl = new URL(WS_URL).origin;
@@ -59,9 +78,12 @@ export default defineBackground(() => {
           .then(([tab]: chrome.tabs.Tab[]) => {
             if (tab?.id != null) {
               activeTabId = tab.id;
-              startCapture(() => sendResponse({ ok: true }));
+              startCapture(sendResponse);
+            } else {
+              sendResponse({ error: 'No active tab to capture' });
             }
-          });
+          })
+          .catch(() => sendResponse({ error: 'Unable to find active tab' }));
         return true;
       }
 
@@ -131,14 +153,21 @@ async function queryOctaMem(prospect: Prospect): Promise<string | null> {
 }
 
 function startCapture(sendResponse: (r: unknown) => void): void {
+  if (captureState !== 'idle') {
+    sendResponse({ error: 'Capture already running' });
+    return;
+  }
+  captureState = 'starting';
   intentionalStop = false;
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  clearPendingStopCloseTimer();
   readSignalConnectionConfig(DEFAULT_CONNECTION)
     .then(config => {
       if (!config.authToken.trim()) {
+        captureState = 'idle';
         sendResponse({ error: 'Connection auth token is required' });
         return;
       }
@@ -151,38 +180,70 @@ function startCapture(sendResponse: (r: unknown) => void): void {
             { audio: true, video: false },
             (audioStream: MediaStream | null) => {
               if (!audioStream) {
+                captureState = 'idle';
                 sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
                 return;
               }
+              if (intentionalStop || captureState !== 'starting') {
+                stopMediaStreamTracks(audioStream);
+                captureState = 'idle';
+                sendResponse({ error: 'Capture stopped before it started' });
+                return;
+              }
               activeStream = audioStream;
-              connectWs(audioStream, config);
+              captureState = 'active';
+              void connectWs(audioStream, config);
               sendResponse({ ok: true });
             },
           );
           return;
         }
+        if (intentionalStop || captureState !== 'starting') {
+          stopMediaStreamTracks(stream);
+          captureState = 'idle';
+          sendResponse({ error: 'Capture stopped before it started' });
+          return;
+        }
         activeStream = stream;
-        connectWs(stream, config);
+        captureState = 'active';
+        void connectWs(stream, config);
         sendResponse({ ok: true });
       });
     })
-    .catch(() => sendResponse({ error: 'Invalid connection settings' }));
+    .catch(() => {
+      captureState = 'idle';
+      sendResponse({ error: 'Invalid connection settings' });
+    });
 }
 
 async function connectWs(stream: MediaStream, config: SignalConnectionConfig): Promise<void> {
-  const stored = (await chrome.storage.session.get([
-    'pendingProspect',
-    'pendingCallType',
-    'pendingPlatform',
-  ])) as Record<string, any>;
-  const prospect: Prospect = stored.pendingProspect ?? { name: 'Unknown' };
-  const callType: CallType = stored.pendingCallType ?? 'enterprise';
-  const platform: 'meet' | 'zoom' | 'teams' = stored.pendingPlatform ?? 'meet';
+  let stored: Record<string, unknown>;
+  try {
+    stored = (await chrome.storage.session.get([
+      'pendingProspect',
+      'pendingCallType',
+      'pendingPlatform',
+    ])) as Record<string, any>;
+  } catch {
+    captureState = 'idle';
+    stopMediaStreamTracks(stream);
+    return;
+  }
+  const prospect: Prospect = isProspect(stored.pendingProspect)
+    ? stored.pendingProspect
+    : { name: 'Unknown' };
+  const callType: CallType = isCallType(stored.pendingCallType)
+    ? stored.pendingCallType
+    : 'enterprise';
+  const platform: 'meet' | 'zoom' | 'teams' = isPlatform(stored.pendingPlatform)
+    ? stored.pendingPlatform
+    : 'meet';
 
   if (intentionalStop) return;
 
   const ws = new WebSocket(
-    authenticatedWsUrl(wsUrlFromServerUrl(config.serverUrl), config.authToken),
+    wsUrlFromServerUrl(config.serverUrl),
+    authenticatedWsProtocols(config.authToken),
   );
   wsocket = ws;
 
@@ -202,6 +263,10 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
       }
       if (msg.type === 'summary') {
         chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
+        closeSocketAfterStop(250);
+      }
+      if (msg.type === 'state' && msg.overlayState === 'POSTCALL') {
+        closeSocketAfterStop(250);
       }
     } catch {
       /* ignore */
@@ -212,6 +277,7 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
 
   ws.onclose = () => {
     if (wsocket === ws) wsocket = null;
+    clearPendingStopCloseTimer();
     stopRecorder();
     stopVideoFramer();
     if (
@@ -228,6 +294,7 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
         void connectWs(stream, config);
       }, delay);
     }
+    if (!wsocket && captureState !== 'starting') captureState = 'idle';
   };
 }
 
@@ -301,8 +368,27 @@ function stopMediaStream(): void {
   activeStream = null;
 }
 
+function clearPendingStopCloseTimer(): void {
+  if (pendingStopCloseTimer !== null) {
+    clearTimeout(pendingStopCloseTimer);
+    pendingStopCloseTimer = null;
+  }
+}
+
+function closeSocketAfterStop(delayMs: number): void {
+  clearPendingStopCloseTimer();
+  pendingStopCloseTimer = setTimeout(() => {
+    pendingStopCloseTimer = null;
+    wsocket?.close();
+    wsocket = null;
+    if (captureState === 'stopping') captureState = 'idle';
+  }, delayMs);
+}
+
 function stopCapture(): void {
   intentionalStop = true;
+  if (captureState === 'idle') return;
+  captureState = 'stopping';
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -312,9 +398,12 @@ function stopCapture(): void {
   if (wsocket) {
     if (wsocket.readyState === WebSocket.OPEN) {
       wsocket.send(JSON.stringify({ type: 'stop' } satisfies ClientMessage));
+      closeSocketAfterStop(STOP_SUMMARY_TIMEOUT_MS);
+    } else {
+      wsocket.close();
+      wsocket = null;
     }
-    wsocket.close();
-    wsocket = null;
   }
   stopMediaStream();
+  captureState = wsocket ? 'stopping' : 'idle';
 }

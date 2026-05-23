@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   authHeaders,
+  authenticatedWsProtocols,
   authenticatedWsUrl,
   normalizeServerUrl,
+  serverOriginPattern,
   wsUrlFromServerUrl,
 } from './connectionConfig';
 
@@ -27,5 +29,19 @@ describe('connection config helpers', () => {
     expect(authenticatedWsUrl('wss://signal.example.com/ws', '')).toBe(
       'wss://signal.example.com/ws',
     );
+  });
+
+  it('builds websocket auth subprotocols without putting tokens in URLs', () => {
+    expect(authenticatedWsProtocols(' secret/token+value ')).toEqual([
+      'signal-token.c2VjcmV0L3Rva2VuK3ZhbHVl',
+    ]);
+    expect(authenticatedWsProtocols('')).toEqual([]);
+  });
+
+  it('builds extension host permission origins from server URLs', () => {
+    expect(serverOriginPattern('https://signal.example.com/dashboard')).toBe(
+      'https://signal.example.com/*',
+    );
+    expect(serverOriginPattern('localhost:8080')).toBe('http://localhost:8080/*');
   });
 });
