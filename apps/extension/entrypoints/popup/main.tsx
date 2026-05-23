@@ -77,12 +77,18 @@ function Popup() {
   return (
     <div className="popup">
       <header>
-        <span>SIGNAL</span>
+        <div className="popup-brand">
+          <span className="brand-mark" />
+          <div>
+            <strong>Signal</strong>
+            <small>{view === 'pre' ? 'Pre-call' : 'Post-call'}</small>
+          </div>
+        </div>
         <button
           className={hasToken ? 'header-action' : 'header-action warning'}
           onClick={() => setShowSettings(v => !v)}
         >
-          Connection
+          {hasToken ? 'Ready' : 'Connect'}
         </button>
       </header>
       {(showSettings || !hasToken) && (

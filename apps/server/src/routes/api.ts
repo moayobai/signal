@@ -73,6 +73,7 @@ const DEFAULT_LIST_LIMIT = 500;
 const MAX_TRANSCRIPT_LIMIT = 10_000;
 const MAX_FRAME_LIMIT = 5_000;
 const MAX_SEARCH_CHUNKS = 25_000;
+const COACH_WINDOW_LIMIT = 500;
 
 function listQuery(req: { query: unknown }, defaultLimit = DEFAULT_LIST_LIMIT) {
   const parsed = ListQuerySchema.safeParse(req.query ?? {});
@@ -81,6 +82,34 @@ function listQuery(req: { query: unknown }, defaultLimit = DEFAULT_LIST_LIMIT) {
     limit: parsed.data.limit ?? defaultLimit,
     offset: parsed.data.offset ?? 0,
   };
+}
+
+interface ParsedScorecard {
+  framework?: string;
+  overallScore?: number;
+  dimensions?: Array<{ key?: string; label?: string; score?: number; justification?: string }>;
+  nextSteps?: string[];
+}
+
+function average(nums: number[]): number | null {
+  if (nums.length === 0) return null;
+  return nums.reduce((sum, n) => sum + n, 0) / nums.length;
+}
+
+function rounded(n: number | null): number | null {
+  return n == null || !Number.isFinite(n) ? null : Math.round(n);
+}
+
+function pct(n: number | null): number | null {
+  return n == null || !Number.isFinite(n) ? null : Math.round(n * 100);
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
 }
 
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
@@ -260,6 +289,163 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     return [...counts.entries()]
       .map(([objection, count]) => ({ objection, count }))
       .sort((a, b) => b.count - a.count);
+  });
+
+  app.get('/api/analytics/coach', async () => {
+    const recentCalls = db
+      .select()
+      .from(callSessions)
+      .orderBy(desc(callSessions.startedAt))
+      .limit(COACH_WINDOW_LIMIT)
+      .all();
+    const sessionIds = recentCalls.map(c => c.id);
+    const summaries =
+      sessionIds.length > 0
+        ? db.select().from(callSummaries).where(inArray(callSummaries.sessionId, sessionIds)).all()
+        : [];
+    const summaryBySession = new Map(summaries.map(s => [s.sessionId, s]));
+
+    const scorecards = recentCalls
+      .map(call => safeParseJson<ParsedScorecard>(summaryBySession.get(call.id)?.scorecard ?? null))
+      .filter(
+        (scorecard): scorecard is ParsedScorecard =>
+          !!scorecard && typeof scorecard.overallScore === 'number',
+      );
+    const scoreValues = scorecards.map(s => s.overallScore!).filter(Number.isFinite);
+    const recentScore = average(scoreValues.slice(0, 5));
+    const priorScore = average(scoreValues.slice(5, 10));
+    const sentimentValues = recentCalls
+      .map(c => c.sentimentAvg)
+      .filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+    const recentSentiment = average(sentimentValues.slice(0, 5));
+    const priorSentiment = average(sentimentValues.slice(5, 10));
+    const talkValues = recentCalls
+      .map(c => c.talkRatio)
+      .filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+    const avgTalkRatio = average(talkValues);
+    const longestMonologueMs = recentCalls
+      .map(c => c.longestMonologueMs)
+      .filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+
+    const objectionCounts = new Map<string, number>();
+    const promptCounts = new Map<string, number>();
+    const dimensionScores = new Map<string, { label: string; total: number; count: number }>();
+    const callTypeCounts = new Map<string, number>();
+    for (const call of recentCalls) {
+      callTypeCounts.set(call.callType, (callTypeCounts.get(call.callType) ?? 0) + 1);
+      const summary = summaryBySession.get(call.id);
+      if (summary) {
+        for (const objection of safeParseArray(summary.objections)) {
+          objectionCounts.set(objection, (objectionCounts.get(objection) ?? 0) + 1);
+        }
+      }
+    }
+    const frameRows =
+      sessionIds.length > 0
+        ? db
+            .select({ promptType: signalFrames.promptType, count: sql<number>`COUNT(*)` })
+            .from(signalFrames)
+            .where(inArray(signalFrames.sessionId, sessionIds))
+            .groupBy(signalFrames.promptType)
+            .all()
+        : [];
+    for (const row of frameRows) promptCounts.set(row.promptType, row.count);
+
+    for (const scorecard of scorecards) {
+      for (const dim of scorecard.dimensions ?? []) {
+        if (typeof dim.score !== 'number' || !Number.isFinite(dim.score)) continue;
+        const key = dim.key ?? dim.label ?? 'unknown';
+        const existing = dimensionScores.get(key) ?? {
+          label: dim.label ?? key,
+          total: 0,
+          count: 0,
+        };
+        existing.total += dim.score;
+        existing.count += 1;
+        dimensionScores.set(key, existing);
+      }
+    }
+
+    const weakestDimension = [...dimensionScores.entries()]
+      .map(([key, value]) => ({
+        key,
+        label: value.label,
+        score: value.count > 0 ? Math.round((value.total / value.count) * 10) / 10 : null,
+      }))
+      .filter(d => d.score != null)
+      .sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
+    const topObjection = [...objectionCounts.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+    const topPrompt = [...promptCounts.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+
+    const talkPct = pct(avgTalkRatio);
+    const focus =
+      talkPct != null && talkPct > 55
+        ? {
+            title: 'Talk time discipline',
+            metric: `${talkPct}%`,
+            rationale: 'Your talk ratio is above the buyer-led target.',
+            action: 'Open with one sharper question, then leave the next answer uninterrupted.',
+          }
+        : weakestDimension
+          ? {
+              title: weakestDimension.label,
+              metric: `${weakestDimension.score}/10`,
+              rationale: 'This is the lowest methodology signal across scored calls.',
+              action: `Make ${weakestDimension.label.toLowerCase()} explicit before the next close.`,
+            }
+          : topObjection
+            ? {
+                title: 'Recurring objection',
+                metric: `${topObjection[1]}x`,
+                rationale: topObjection[0],
+                action: 'Prepare a proof point and a question that turns this into criteria.',
+              }
+            : {
+                title: 'First compounding loop',
+                metric: `${recentCalls.length}`,
+                rationale: 'Complete more calls to establish a coaching baseline.',
+                action: 'Run the next call through SIGNAL and review the post-call scorecard.',
+              };
+
+    return {
+      windowSize: recentCalls.length,
+      averages: {
+        sentiment: rounded(average(sentimentValues)),
+        sentimentDelta:
+          recentSentiment != null && priorSentiment != null
+            ? Math.round(recentSentiment - priorSentiment)
+            : null,
+        score: rounded(average(scoreValues)),
+        scoreDelta:
+          recentScore != null && priorScore != null ? Math.round(recentScore - priorScore) : null,
+        talkRatio: talkPct,
+        longestMonologueSec: rounded(average(longestMonologueMs.map(ms => ms / 1000))),
+      },
+      focus,
+      topObjection: topObjection ? { objection: topObjection[0], count: topObjection[1] } : null,
+      topPromptType: topPrompt ? { promptType: topPrompt[0], count: topPrompt[1] } : null,
+      weakestDimension: weakestDimension ?? null,
+      callTypeMix: [...callTypeCounts.entries()]
+        .map(([callType, count]) => ({ callType, count }))
+        .sort((a, b) => b.count - a.count),
+      loop: [
+        {
+          label: 'Capture',
+          value: recentCalls.length,
+          detail: `${summaries.length} debriefs saved`,
+        },
+        {
+          label: 'Coach',
+          value: scoreValues.length,
+          detail: firstNonEmpty(weakestDimension?.label, topPrompt?.[0], 'Awaiting scorecards'),
+        },
+        {
+          label: 'Compound',
+          value: objectionCounts.size,
+          detail: firstNonEmpty(topObjection?.[0], 'No recurring objection yet'),
+        },
+      ],
+    };
   });
 
   // ── Semantic transcript search ─────────────────────────────────────

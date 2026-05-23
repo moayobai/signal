@@ -148,7 +148,7 @@ export function LiveSidebar({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="live">
-            {danger ? 'Danger' : 'Live'} · {formatTime(elapsedSeconds)}
+            {danger ? 'Risk' : 'Live'} · {formatTime(elapsedSeconds)}
           </span>
           {onCollapse && (
             <button
@@ -186,7 +186,7 @@ export function LiveSidebar({
         <div className="sentiment">
           <SentimentRing value={sentiment} size={72} stroke={5} showLabel />
           <div className="meta">
-            <span className="label-row">Sentiment</span>
+            <span className="label-row">Buyer read</span>
             <span className="value">{sentiment != null ? Math.round(sentiment) : '—'}</span>
             {delta != null ? (
               <span className={`delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}`}>
@@ -203,7 +203,7 @@ export function LiveSidebar({
       {frame && (
         <section className="section">
           <div className="label">
-            <span>Speech</span>
+            <span>Conversation</span>
           </div>
           <div className="body-lang">
             {BODY_LABELS.map(({ k, label }) => (
@@ -237,7 +237,7 @@ export function LiveSidebar({
         style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
         <div className="label">
-          <span>Cues</span>
+          <span>Coaching cues</span>
           <span style={{ color: 'rgba(255,255,255,0.22)' }}>{cueHistory.length}</span>
         </div>
         <div className="cues">
@@ -250,7 +250,7 @@ export function LiveSidebar({
                 padding: '4px 0',
               }}
             >
-              Listening — first cue soon.
+              Listening for signal.
             </div>
           ) : (
             cueHistory
@@ -285,11 +285,11 @@ export function LiveSidebar({
       {/* Transcript tail */}
       <section className="transcript-tail">
         <div className="label">
-          <span>Transcript</span>
+          <span>Transcript tail</span>
         </div>
         {tail.length === 0 ? (
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-            Awaiting audio…
+            Awaiting audio.
           </div>
         ) : (
           tail.map((l, i) => (

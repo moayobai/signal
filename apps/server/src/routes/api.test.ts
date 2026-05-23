@@ -71,4 +71,66 @@ describe('REST API', () => {
     expect(Array.isArray(res.json())).toBe(true);
     await app.close();
   });
+
+  it('GET /api/analytics/coach returns a coaching focus from scored calls', async () => {
+    const { app, db } = await buildApp();
+    const { contacts, callSessions, callSummaries, signalFrames } =
+      await import('../services/db.js');
+    const now = Date.now();
+    db.insert(contacts)
+      .values({ id: 'c1', name: 'Maya', company: 'Northstar', createdAt: now, updatedAt: now })
+      .run();
+    db.insert(callSessions)
+      .values({
+        id: 's1',
+        contactId: 'c1',
+        platform: 'meet',
+        callType: 'investor',
+        startedAt: now,
+        endedAt: now + 1000,
+        durationMs: 1000,
+        sentimentAvg: 72,
+        talkRatio: 0.71,
+        longestMonologueMs: 44_000,
+      })
+      .run();
+    db.insert(callSummaries)
+      .values({
+        id: 'sum1',
+        sessionId: 's1',
+        winSignals: JSON.stringify(['Budget owner engaged']),
+        objections: JSON.stringify(['Needs proof around security']),
+        decisions: JSON.stringify(['Send diligence pack']),
+        followUpDraft: 'Follow-up',
+        scorecard: JSON.stringify({
+          framework: 'BANT',
+          overallScore: 64,
+          dimensions: [{ key: 'authority', label: 'Authority', score: 4, justification: 'Weak' }],
+          nextSteps: ['Confirm authority'],
+        }),
+        createdAt: now,
+      })
+      .run();
+    db.insert(signalFrames)
+      .values({
+        sessionId: 's1',
+        promptType: 'ASK',
+        promptText: 'Ask for timeline.',
+        confidence: 0.8,
+        sentiment: 72,
+        dangerFlag: 0,
+        createdAt: now,
+      })
+      .run();
+
+    const res = await app.inject({ method: 'GET', url: '/api/analytics/coach' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.windowSize).toBe(1);
+    expect(body.focus.title).toBe('Talk time discipline');
+    expect(body.averages.score).toBe(64);
+    expect(body.topObjection.objection).toBe('Needs proof around security');
+    expect(body.topPromptType.promptType).toBe('ASK');
+    await app.close();
+  });
 });

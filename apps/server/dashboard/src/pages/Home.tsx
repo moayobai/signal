@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, type Contact, type CallSession, type UpcomingMeeting } from '../lib/api';
+import {
+  api,
+  type CoachAnalytics,
+  type Contact,
+  type CallSession,
+  type UpcomingMeeting,
+} from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, TrendingIcon, SparkIcon, TargetIcon } from '../components/icons';
 
@@ -87,10 +93,79 @@ function formatWhen(ts: number): string {
   );
 }
 
+function signed(n: number | null): string {
+  if (n == null) return 'baseline pending';
+  if (n === 0) return 'flat';
+  return `${n > 0 ? '+' : ''}${n}`;
+}
+
+function callTypeLabel(type: string): string {
+  if (type === 'bd') return 'BD';
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function CoachFocusCard({ coach, loading }: { coach: CoachAnalytics | null; loading: boolean }) {
+  const focus = coach?.focus;
+  return (
+    <article className="command-card focus-card">
+      <div className="label">
+        <SparkIcon size={11} /> Next edge
+      </div>
+      {focus ? (
+        <>
+          <div className="focus-main">
+            <h2>{focus.title}</h2>
+            <span>{focus.metric}</span>
+          </div>
+          <p>{focus.rationale}</p>
+          <div className="focus-action">{focus.action}</div>
+        </>
+      ) : (
+        <>
+          <div className="focus-main">
+            <h2>{loading ? 'Reading the loop' : 'First call pending'}</h2>
+            <span>—</span>
+          </div>
+          <p>Complete a call to establish the first coaching baseline.</p>
+          <div className="focus-action">Start with a sales or investor conversation.</div>
+        </>
+      )}
+    </article>
+  );
+}
+
+function LoopCard({ coach }: { coach: CoachAnalytics | null }) {
+  const loop = coach?.loop ?? [
+    { label: 'Capture', value: 0, detail: 'Calls' },
+    { label: 'Coach', value: 0, detail: 'Scorecards' },
+    { label: 'Compound', value: 0, detail: 'Patterns' },
+  ];
+  return (
+    <article className="command-card loop-card">
+      <div className="label">
+        <TrendingIcon size={11} /> Feedback loop
+      </div>
+      <div className="loop-rail">
+        {loop.map((item, index) => (
+          <div className="loop-step" key={item.label}>
+            <span className="loop-index">{index + 1}</span>
+            <div>
+              <strong>{item.label}</strong>
+              <span>{item.value}</span>
+            </div>
+            <p>{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 export default function Home() {
   const calls = useQuery({ queryKey: ['calls'], queryFn: api.calls });
   const contacts = useQuery({ queryKey: ['contacts'], queryFn: api.contacts });
   const trend = useQuery({ queryKey: ['sentiment-trend'], queryFn: api.sentimentTrend });
+  const coach = useQuery({ queryKey: ['coach-analytics'], queryFn: api.coach });
   const nextMeeting = useQuery({
     queryKey: ['next-meeting'],
     queryFn: api.nextMeeting,
@@ -104,15 +179,6 @@ export default function Home() {
   const avgSent = sentValues.length
     ? sentValues.reduce((a, b) => a + b, 0) / sentValues.length
     : null;
-
-  const now = Date.now();
-  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-  const thisWeek = calls.data?.filter(c => now - c.startedAt < WEEK_MS).length ?? 0;
-  const lastWeek =
-    calls.data?.filter(c => {
-      const age = now - c.startedAt;
-      return age >= WEEK_MS && age < 2 * WEEK_MS;
-    }).length ?? 0;
 
   const talkValues = calls.data?.filter(c => c.talkRatio != null).map(c => c.talkRatio!) ?? [];
   const avgTalk = talkValues.length
@@ -133,22 +199,28 @@ export default function Home() {
   const recent = (calls.data ?? []).slice(0, 8);
   const contactById = new Map<string, Contact>();
   for (const c of contacts.data ?? []) contactById.set(c.id, c);
+  const coachData = coach.data ?? null;
+  const methodScore = coachData?.averages.score ?? null;
 
   return (
     <div>
-      <header className="page-head">
+      <header className="page-head command-head">
         <div className="titles">
-          <span className="eyebrow">Today · Overview</span>
+          <span className="eyebrow">Command center</span>
           <h1>
-            Your <em>signal</em> at a glance
+            Win the next <em>conversation</em>
           </h1>
           <p className="subtitle">
-            Recent calls, sentiment trend, and how active this week has been. Tap a row to dive in.
+            Every call sharpens the next prep, live cue, follow-up, and coaching edge.
           </p>
         </div>
       </header>
 
-      <NextMeetingCard meeting={nextMeeting.data ?? null} contacts={contacts.data ?? []} />
+      <section className="command-grid">
+        <CoachFocusCard coach={coachData} loading={coach.isLoading} />
+        <LoopCard coach={coachData} />
+        <NextMeetingCard meeting={nextMeeting.data ?? null} contacts={contacts.data ?? []} />
+      </section>
 
       <div className="stat-grid">
         <article className="stat stat-with-ring">
@@ -161,7 +233,7 @@ export default function Home() {
               <span className="unit">recorded</span>
             </div>
             <div className="delta">
-              <strong>{contacts.data?.length ?? 0}</strong> contacts in your CRM
+              <strong>{coachData?.windowSize ?? total}</strong> in coaching window
             </div>
           </div>
         </article>
@@ -170,9 +242,12 @@ export default function Home() {
           <div className="label">
             <TrendingIcon size={11} /> Sentiment trend
           </div>
-          <div className="value" style={{ fontSize: 36 }}>
-            {avgSent != null ? Math.round(avgSent) : '—'}
-            <span className="unit">/ 100 avg</span>
+          <div
+            className={`value ${avgSent == null ? 'metric-empty' : ''}`}
+            style={{ fontSize: 36 }}
+          >
+            {avgSent != null ? Math.round(avgSent) : 'No read'}
+            {avgSent != null && <span className="unit">/ 100 avg</span>}
           </div>
           {trendPoints.length > 0 ? (
             <Sparkline points={trendPoints} />
@@ -180,21 +255,21 @@ export default function Home() {
             <div className="skel-text" style={{ marginTop: 10, height: 48 }} />
           )}
           <div className="delta">
-            <strong>{trendPoints.length}</strong> weeks · last {trendPoints.length} points
+            <strong>{signed(coachData?.averages.sentimentDelta ?? null)}</strong> last 5 vs prior
           </div>
         </article>
 
         <article className="stat stat-with-ring">
           <div>
             <div className="label">
-              <TargetIcon size={11} /> Calls · this week
+              <TargetIcon size={11} /> Method score
             </div>
-            <div className="value">
-              {thisWeek}
-              <span className="unit">in last 7 days</span>
+            <div className={`value ${methodScore == null ? 'metric-empty' : ''}`}>
+              {methodScore != null ? methodScore : 'No score'}
+              {methodScore != null && <span className="unit">/ 100</span>}
             </div>
             <div className="delta">
-              vs <strong>{lastWeek}</strong> last week
+              <strong>{signed(coachData?.averages.scoreDelta ?? null)}</strong> last 5 vs prior
             </div>
           </div>
         </article>
@@ -202,16 +277,55 @@ export default function Home() {
         <article className="stat stat-with-ring">
           <div>
             <div className="label">
-              <TargetIcon size={11} /> Avg talk time
+              <TargetIcon size={11} /> Buyer-led time
             </div>
-            <div className="value" style={talkColor ? { color: talkColor } : undefined}>
-              {talkPct != null ? `${talkPct}%` : '—'}
-              <span className="unit">you</span>
+            <div
+              className={`value ${talkPct == null ? 'metric-empty' : ''}`}
+              style={talkColor ? { color: talkColor } : undefined}
+            >
+              {talkPct != null ? `${talkPct}%` : 'No read'}
+              {talkPct != null && <span className="unit">you</span>}
             </div>
             <div className="delta">
-              <strong>{talkValues.length}</strong> calls measured · target 45%
+              <strong>{coachData?.averages.longestMonologueSec ?? '—'}s</strong> avg monologue
             </div>
           </div>
+        </article>
+      </div>
+
+      <div className="edge-grid">
+        <article className="edge-card">
+          <div className="label">Call mix</div>
+          <div className="mix-list">
+            {(coachData?.callTypeMix ?? []).length > 0 ? (
+              coachData!.callTypeMix.map(item => (
+                <div className="mix-row" key={item.callType}>
+                  <span>{callTypeLabel(item.callType)}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="empty-copy">No mix yet.</p>
+            )}
+          </div>
+        </article>
+        <article className="edge-card">
+          <div className="label">Recurring friction</div>
+          <h3>{coachData?.topObjection?.objection ?? 'No recurring objection yet'}</h3>
+          <p>
+            {coachData?.topObjection
+              ? `${coachData.topObjection.count} calls surfaced this objection.`
+              : 'The pattern will appear after more completed debriefs.'}
+          </p>
+        </article>
+        <article className="edge-card">
+          <div className="label">Live cue pattern</div>
+          <h3>{coachData?.topPromptType?.promptType ?? 'Awaiting cues'}</h3>
+          <p>
+            {coachData?.topPromptType
+              ? `${coachData.topPromptType.count} cues in the coaching window.`
+              : 'Live coaching history will build from upcoming calls.'}
+          </p>
         </article>
       </div>
 
@@ -256,11 +370,10 @@ function NextMeetingCard({
   const navigate = useNavigate();
   if (!meeting) {
     return (
-      <article className="glass" style={{ padding: 16, marginBottom: 20, opacity: 0.7 }}>
-        <div className="label" style={{ marginBottom: 4 }}>
-          Next meeting
-        </div>
-        <div style={{ color: 'var(--muted, #8a8a8a)' }}>No meetings in the next hour.</div>
+      <article className="command-card meeting-card empty-meeting">
+        <div className="label">Next meeting</div>
+        <h2>No meeting queued</h2>
+        <p>Calendar prep is clear for the next hour.</p>
       </article>
     );
   }
@@ -273,48 +386,22 @@ function NextMeetingCard({
     : undefined;
 
   return (
-    <article
-      className="glass"
-      style={{
-        padding: 16,
-        marginBottom: 20,
-        display: 'flex',
-        gap: 16,
-        alignItems: 'center',
-        flexWrap: 'wrap',
-      }}
-    >
-      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-        <div className="label" style={{ marginBottom: 4 }}>
+    <article className="command-card meeting-card">
+      <div className="meeting-copy">
+        <div className="label">
           Next meeting · {meeting.provider === 'google' ? 'Google' : 'Outlook'}
         </div>
-        <div
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {meeting.title}
-        </div>
-        <div style={{ marginTop: 4, color: 'var(--muted, #8a8a8a)', fontSize: 13 }}>
+        <h2>{meeting.title}</h2>
+        <p>
           Starts in <strong>{mins}</strong> min · {shown.map(a => a.name ?? a.email).join(', ')}
           {meeting.attendees.length > shown.length
             ? ` +${meeting.attendees.length - shown.length}`
             : ''}
-        </div>
+        </p>
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="meeting-actions">
         {meeting.meetingLink && (
-          <a
-            href={meeting.meetingLink}
-            target="_blank"
-            rel="noreferrer"
-            className="pill active"
-            style={{ textDecoration: 'none' }}
-          >
+          <a href={meeting.meetingLink} target="_blank" rel="noreferrer" className="pill active">
             Join
           </a>
         )}

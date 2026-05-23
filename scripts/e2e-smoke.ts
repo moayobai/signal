@@ -367,7 +367,7 @@ async function seedSyntheticData(contactId: string, sessionId: string): Promise<
 
   // Summary row
   db.prepare(
-    'INSERT INTO call_summaries (id, session_id, win_signals, objections, decisions, follow_up_draft, created_at) VALUES (?,?,?,?,?,?,?)',
+    'INSERT INTO call_summaries (id, session_id, win_signals, objections, decisions, follow_up_draft, scorecard, created_at) VALUES (?,?,?,?,?,?,?,?)',
   ).run(
     randomUUID(),
     sessionId,
@@ -375,6 +375,15 @@ async function seedSyntheticData(contactId: string, sessionId: string): Promise<
     JSON.stringify(['Wants traction proof before committing']),
     JSON.stringify(['Send deck by Friday', 'Intro to 2 LPs next week']),
     'James, great speaking today — attaching the deck as discussed. Happy to walk through the traction data anytime next week.',
+    JSON.stringify({
+      framework: 'BANT',
+      overallScore: 67,
+      dimensions: [
+        { key: 'budget', label: 'Budget', score: 7, justification: 'Round size discussed.' },
+        { key: 'authority', label: 'Authority', score: 5, justification: 'Authority implied.' },
+      ],
+      nextSteps: ['Confirm decision process'],
+    }),
     now,
   );
   db.close();
@@ -450,6 +459,15 @@ async function probeRestPopulated(contactId: string, sessionId: string): Promise
   record(
     'GET /api/analytics/sentiment returns weekly bucket',
     sentimentTrend.status === 200 && (sentimentTrend.body as any[]).length === 1,
+  );
+
+  const coach = await http<any>('/api/analytics/coach');
+  record(
+    'GET /api/analytics/coach returns compounding focus',
+    coach.status === 200 &&
+      (coach.body as any).focus?.title &&
+      (coach.body as any).averages?.score === 67 &&
+      (coach.body as any).topObjection?.objection === 'Wants traction proof before committing',
   );
 }
 

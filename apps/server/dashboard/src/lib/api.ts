@@ -98,6 +98,29 @@ export interface UpcomingMeeting {
   detectedAt: number;
 }
 
+export interface CoachAnalytics {
+  windowSize: number;
+  averages: {
+    sentiment: number | null;
+    sentimentDelta: number | null;
+    score: number | null;
+    scoreDelta: number | null;
+    talkRatio: number | null;
+    longestMonologueSec: number | null;
+  };
+  focus: {
+    title: string;
+    metric: string;
+    rationale: string;
+    action: string;
+  };
+  topObjection: { objection: string; count: number } | null;
+  topPromptType: { promptType: string; count: number } | null;
+  weakestDimension: { key: string; label: string; score: number | null } | null;
+  callTypeMix: Array<{ callType: string; count: number }>;
+  loop: Array<{ label: string; value: number; detail: string | null }>;
+}
+
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, init);
   if (!res.ok) throw new ApiError(res.status, friendlyMessage(res.status, path));
@@ -136,6 +159,7 @@ export const api = {
     j<Array<{ week: string; avg: number; count: number }>>('/analytics/sentiment'),
   promptTypes: () => j<Array<{ promptType: string; count: number }>>('/analytics/prompt-types'),
   objections: () => j<Array<{ objection: string; count: number }>>('/analytics/objections'),
+  coach: () => j<CoachAnalytics>('/analytics/coach'),
   nextMeeting: () => j<UpcomingMeeting | null>('/calendar/next'),
   upcomingMeetings: () => j<UpcomingMeeting[]>('/calendar/upcoming'),
   searchTranscripts: (q: string, limit = 10) =>

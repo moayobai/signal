@@ -66,7 +66,7 @@ export function NudgeCard({ frame, danger, freshKey, onDismiss }: Props) {
 
       <div className="body">{frame.prompt.text}</div>
 
-      {danger && frame.dangerReason && <div className="danger-reason">⚠ {frame.dangerReason}</div>}
+      {danger && frame.dangerReason && <div className="danger-reason">{frame.dangerReason}</div>}
 
       <div className="conf" style={{ color: getTypeColor(frame.prompt.type) }}>
         <span>confidence</span>

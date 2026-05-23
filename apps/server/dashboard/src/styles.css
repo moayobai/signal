@@ -376,6 +376,266 @@ body::before {
   margin: 0;
 }
 
+.command-head {
+  margin-bottom: 22px;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.35fr) minmax(260px, 1fr) minmax(260px, 0.95fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.command-card,
+.edge-card {
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045)),
+    rgba(255, 255, 255, 0.035);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.command-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(245, 165, 36, 0.08), transparent 42%);
+  opacity: 0.85;
+}
+
+.command-card > *,
+.edge-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.command-card .label,
+.edge-card .label,
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.focus-card {
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.focus-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  margin-top: 26px;
+}
+
+.focus-main h2,
+.meeting-card h2,
+.edge-card h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-1);
+}
+
+.focus-main h2 {
+  font-size: 34px;
+  line-height: 1.02;
+}
+
+.focus-main span {
+  font-family: var(--font-display);
+  font-size: 50px;
+  line-height: 0.9;
+  font-style: italic;
+  color: var(--accent);
+}
+
+.focus-card p,
+.meeting-card p,
+.edge-card p,
+.loop-step p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.focus-card p {
+  margin-top: 14px;
+  max-width: 520px;
+}
+
+.focus-action {
+  margin-top: 20px;
+  padding: 13px 14px;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--ink-1);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.loop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.loop-rail {
+  display: grid;
+  gap: 10px;
+}
+
+.loop-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.loop-index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(245, 165, 36, 0.14);
+  border: 1px solid rgba(245, 165, 36, 0.28);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.loop-step div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.loop-step strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.loop-step div span {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.loop-step p {
+  grid-column: 2;
+  margin-top: -6px;
+}
+
+.meeting-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.meeting-card h2 {
+  margin-top: 18px;
+  font-size: 24px;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meeting-copy {
+  min-width: 0;
+}
+
+.meeting-copy p {
+  margin-top: 8px;
+}
+
+.meeting-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edge-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) repeat(2, minmax(240px, 1fr));
+  gap: 18px;
+  margin: -10px 0 36px;
+}
+
+.edge-card {
+  padding: 18px;
+  border-radius: var(--r-md);
+}
+
+.edge-card h3 {
+  margin-top: 14px;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.edge-card p {
+  margin-top: 10px;
+}
+
+.mix-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mix-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.mix-row strong {
+  font-family: var(--font-mono);
+  color: var(--ink-1);
+  font-weight: 500;
+}
+
+.empty-copy {
+  margin: 14px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
 /* ============================================================
    Glass primitive
    ============================================================ */
@@ -547,6 +807,14 @@ body::before {
   color: var(--ink-3);
   text-transform: uppercase;
   white-space: nowrap;
+}
+.stat .value.metric-empty {
+  font-family: var(--font-ui);
+  font-size: 20px !important;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink-3);
 }
 .stat .delta {
   margin-top: 14px;
@@ -858,7 +1126,10 @@ body::before {
 }
 .t-row {
   display: grid;
-  grid-template-columns: minmax(160px, 2fr) minmax(130px, 2fr) minmax(110px, 1.5fr) minmax(120px, 2fr) minmax(56px, 1fr) auto;
+  grid-template-columns: minmax(160px, 2fr) minmax(130px, 2fr) minmax(110px, 1.5fr) minmax(
+      120px,
+      2fr
+    ) minmax(56px, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 14px 22px;
@@ -1740,6 +2011,15 @@ dialog::backdrop {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .command-grid,
+  .edge-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .focus-card {
+    grid-column: 1 / -1;
+  }
+
   .detail-grid,
   .summary-grid {
     grid-template-columns: 1fr;
@@ -1818,6 +2098,19 @@ dialog::backdrop {
     flex-direction: column;
   }
 
+  .command-grid,
+  .edge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-main {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-main span {
+    font-size: 42px;
+  }
+
   .search {
     max-width: none;
   }
@@ -1850,6 +2143,15 @@ dialog::backdrop {
     grid-template-columns: 1fr;
     gap: 14px;
     margin-bottom: 28px;
+  }
+
+  .command-card,
+  .edge-card {
+    padding: 18px;
+  }
+
+  .focus-main h2 {
+    font-size: 28px;
   }
 
   .stat {

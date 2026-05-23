@@ -180,8 +180,8 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
         <div className="sig-postcall">
           <div className="head">
             <div>
-              <div className="eyebrow">Call complete</div>
-              <h2>Here's what happened.</h2>
+              <div className="eyebrow">Debrief saved</div>
+              <h2>Next move is ready.</h2>
             </div>
           </div>
 
@@ -214,8 +214,8 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
         <div className="sig-postcall">
           <div className="head">
             <div>
-              <div className="eyebrow">Call complete</div>
-              <h2>No summary available.</h2>
+              <div className="eyebrow">Call saved</div>
+              <h2>Summary unavailable.</h2>
             </div>
           </div>
           <div className="followup">

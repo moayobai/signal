@@ -11,6 +11,13 @@ interface Props {
 
 const CALL_TYPES: CallType[] = ['investor', 'enterprise', 'bd', 'customer'];
 
+const CALL_LABELS: Record<CallType, string> = {
+  investor: 'Investor',
+  enterprise: 'Enterprise',
+  bd: 'BD',
+  customer: 'Customer',
+};
+
 interface DetectedMeeting {
   id: string;
   title: string;
@@ -63,29 +70,13 @@ export function PreCallSetup({ prospect, connectionReady, onChange, onStart }: P
   return (
     <div className="pre-call">
       {showBanner && (
-        <div
-          style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(245, 165, 36, 0.12)',
-            border: '1px solid rgba(245, 165, 36, 0.35)',
-            marginBottom: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 13,
-          }}
-        >
-          <span role="img" aria-label="calendar">
-            🗓
-          </span>
-          <span
-            style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          >
+        <div className="meeting-detect">
+          <span className="meeting-dot" aria-hidden="true" />
+          <span className="meeting-title">
             Detected: <strong>{detected!.title}</strong> in {minutes} min
           </span>
           <button className="pill active" onClick={applyDetected}>
-            Use this
+            Use
           </button>
           <button className="pill" onClick={() => setDismissed(true)} aria-label="Dismiss">
             ×
@@ -134,7 +125,7 @@ export function PreCallSetup({ prospect, connectionReady, onChange, onStart }: P
               className={callType === t ? 'pill active' : 'pill'}
               onClick={() => setCallType(t)}
             >
-              {t}
+              {CALL_LABELS[t]}
             </button>
           ))}
         </div>
@@ -143,7 +134,7 @@ export function PreCallSetup({ prospect, connectionReady, onChange, onStart }: P
       <OctaMemPanel prospect={prospect} />
 
       <button className="start-btn" disabled={!canStart} onClick={() => onStart(callType)}>
-        {connectionReady ? 'Start Call' : 'Save Connection First'}
+        {connectionReady ? 'Start Signal' : 'Save Connection First'}
       </button>
     </div>
   );
