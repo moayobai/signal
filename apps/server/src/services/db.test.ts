@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { initDb, contacts, callSessions } from './db.js';
 
 describe('db', () => {
@@ -109,6 +110,42 @@ describe('db', () => {
     expect(migratedColumns.map(c => c.name)).toContain('talk_ratio');
 
     backup.close();
+    migrated.$client.close();
+  });
+
+  it('backs up file: URL databases before applying pending migrations', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'signal-db-file-url-'));
+    const path = join(dir, 'signal.db');
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE contacts (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, linkedin_url TEXT,
+        company TEXT, role TEXT, notes TEXT, octamem_id TEXT,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE call_sessions (
+        id TEXT PRIMARY KEY,
+        contact_id TEXT,
+        platform TEXT NOT NULL, call_type TEXT NOT NULL,
+        started_at INTEGER NOT NULL, ended_at INTEGER,
+        duration_ms INTEGER, sentiment_avg REAL
+      );
+      CREATE TABLE call_summaries (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL UNIQUE,
+        win_signals TEXT NOT NULL, objections TEXT NOT NULL, decisions TEXT NOT NULL,
+        follow_up_draft TEXT NOT NULL, created_at INTEGER NOT NULL
+      );
+    `);
+    legacy.close();
+
+    const backupDir = join(dir, 'migration-backups');
+    const migrated = initDb(pathToFileURL(path).toString(), {
+      backupDir,
+      now: () => Date.UTC(2026, 3, 29),
+    }) as unknown as {
+      $client: Database.Database;
+    };
+    expect(readdirSync(backupDir)).toHaveLength(1);
     migrated.$client.close();
   });
 });

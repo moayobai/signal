@@ -33,6 +33,10 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function CallDetail() {
   const { id = '' } = useParams();
   const callQ = useQuery({ queryKey: ['call', id], queryFn: () => api.call(id) });
@@ -74,6 +78,14 @@ export default function CallDetail() {
       .padStart(2, '0');
     const ss = (s % 60).toString().padStart(2, '0');
     return `${mm}:${ss}`;
+  }
+
+  if (callQ.isError) {
+    return (
+      <div className="empty glass">
+        <p>{errorMessage(callQ.error, 'Unable to load this call.')}</p>
+      </div>
+    );
   }
 
   if (!callQ.data) {
@@ -216,7 +228,11 @@ export default function CallDetail() {
           <span className="meta">{transcriptQ.data?.length ?? 0} lines</span>
         </div>
         <div className="transcript">
-          {transcriptQ.data?.length === 0 ? (
+          {transcriptQ.isError ? (
+            <div className="empty">
+              <p>{errorMessage(transcriptQ.error, 'Transcript could not be loaded.')}</p>
+            </div>
+          ) : transcriptQ.data?.length === 0 ? (
             <div className="empty">
               <p>Transcript was not captured for this call.</p>
             </div>
@@ -240,7 +256,11 @@ export default function CallDetail() {
           <span className="meta">{framesQ.data?.length ?? 0} fired</span>
         </div>
         <div className="frames">
-          {framesQ.data?.length === 0 ? (
+          {framesQ.isError ? (
+            <div className="empty">
+              <p>{errorMessage(framesQ.error, 'Signal frames could not be loaded.')}</p>
+            </div>
+          ) : framesQ.data?.length === 0 ? (
             <div className="empty">
               <p>No signals fired during this call.</p>
             </div>

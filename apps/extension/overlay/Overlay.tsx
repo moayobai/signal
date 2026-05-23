@@ -209,6 +209,20 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
           <div className="followup">{postCallSummary.followUpDraft}</div>
         </div>
       )}
+
+      {overlayState === 'POSTCALL' && !postCallSummary && (
+        <div className="sig-postcall">
+          <div className="head">
+            <div>
+              <div className="eyebrow">Call complete</div>
+              <h2>No summary available.</h2>
+            </div>
+          </div>
+          <div className="followup">
+            The call was saved, but SIGNAL could not generate a post-call summary.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

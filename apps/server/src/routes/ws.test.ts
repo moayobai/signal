@@ -155,6 +155,38 @@ describe('WebSocket route', () => {
     ws.close();
   });
 
+  it('emits terminal post-call state when summary generation is unavailable', async () => {
+    const ws = await connectAndDrainConnected(address);
+    const messages: unknown[] = [];
+    ws.on('message', data => {
+      messages.push(JSON.parse(data.toString()));
+    });
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
+    await new Promise(r => setTimeout(r, 100));
+    ws.send(JSON.stringify({ type: 'stop' }));
+    await new Promise(r => setTimeout(r, 100));
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'summary_unavailable' }));
+    expect(messages).toContainEqual({ type: 'state', overlayState: 'POSTCALL' });
+    ws.close();
+  });
+
+  it('closes malformed JSON control messages with policy violation', async () => {
+    const ws = await connectAndDrainConnected(address);
+    const closeCode = new Promise<number>(resolve => {
+      ws.once('close', code => resolve(code));
+    });
+    ws.send(JSON.stringify({ type: 'start' }));
+    await expect(closeCode).resolves.toBe(1008);
+    expect(built.db.select().from(callSessions).all()).toHaveLength(0);
+  });
+
   it('handles binary audio chunk', async () => {
     const ws = await connectAndDrainConnected(address);
     ws.send(Buffer.from([0x01, 0x02, 0x03]));

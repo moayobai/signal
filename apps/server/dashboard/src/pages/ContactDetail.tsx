@@ -30,6 +30,10 @@ function formatWhen(ts: number): string {
   });
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function ContactDetail() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
@@ -90,6 +94,14 @@ export default function ContactDetail() {
     retry: false,
     staleTime: 30_000,
   });
+
+  if (contactQ.isError) {
+    return (
+      <div className="empty glass">
+        <p>{errorMessage(contactQ.error, 'Unable to load this contact.')}</p>
+      </div>
+    );
+  }
 
   if (!contactQ.data) {
     return (

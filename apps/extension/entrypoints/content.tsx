@@ -96,7 +96,20 @@ export default defineContentScript({
           store.setOverlayState('LIVE');
           break;
         case 'summary':
-          chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
+          chrome.storage.session.set({
+            latestSummary: msg.summary,
+            summaryError: null,
+            popupView: 'post',
+          });
+          store.setPostCallSummary(msg.summary);
+          store.setOverlayState('POSTCALL');
+          break;
+        case 'summary_unavailable':
+          chrome.storage.session.set({
+            latestSummary: null,
+            summaryError: msg.message,
+            popupView: 'post',
+          });
           store.setOverlayState('POSTCALL');
           break;
         case 'error':

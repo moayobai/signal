@@ -64,13 +64,34 @@ const SearchTranscriptsSchema = z.object({
   query: z.string().min(1).max(200),
   limit: z.number().int().min(1).max(50).optional(),
 });
+const ListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(10_000).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).optional(),
+});
+
+const DEFAULT_LIST_LIMIT = 500;
+const MAX_TRANSCRIPT_LIMIT = 10_000;
+const MAX_FRAME_LIMIT = 5_000;
+const MAX_SEARCH_CHUNKS = 25_000;
+
+function listQuery(req: { query: unknown }, defaultLimit = DEFAULT_LIST_LIMIT) {
+  const parsed = ListQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) return { limit: defaultLimit, offset: 0 };
+  return {
+    limit: parsed.data.limit ?? defaultLimit,
+    offset: parsed.data.offset ?? 0,
+  };
+}
 
 export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): void {
   const { db, octamemApiKey, voyageApiKey } = opts;
 
   // ── Contacts ───────────────────────────────────────────────────────
 
-  app.get('/api/contacts', async () => db.select().from(contacts).all());
+  app.get('/api/contacts', async req => {
+    const { limit, offset } = listQuery(req);
+    return db.select().from(contacts).orderBy(asc(contacts.name)).limit(limit).offset(offset).all();
+  });
 
   app.post('/api/contacts', async (req, reply) => {
     const parsed = ContactCreateSchema.safeParse(req.body);
@@ -123,9 +144,16 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   // ── Calls ──────────────────────────────────────────────────────────
 
-  app.get('/api/calls', async () =>
-    db.select().from(callSessions).orderBy(desc(callSessions.startedAt)).all(),
-  );
+  app.get('/api/calls', async req => {
+    const { limit, offset } = listQuery(req);
+    return db
+      .select()
+      .from(callSessions)
+      .orderBy(desc(callSessions.startedAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
+  });
 
   app.get('/api/calls/:id', async (req, reply) => {
     const id = (req.params as { id: string }).id;
@@ -136,16 +164,27 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   app.get('/api/calls/:id/transcript', async req => {
     const id = (req.params as { id: string }).id;
-    return db.select().from(transcriptLines).where(eq(transcriptLines.sessionId, id)).all();
+    const { limit, offset } = listQuery(req, MAX_TRANSCRIPT_LIMIT);
+    return db
+      .select()
+      .from(transcriptLines)
+      .where(eq(transcriptLines.sessionId, id))
+      .orderBy(transcriptLines.timestamp)
+      .limit(Math.min(limit, MAX_TRANSCRIPT_LIMIT))
+      .offset(offset)
+      .all();
   });
 
   app.get('/api/calls/:id/frames', async req => {
     const id = (req.params as { id: string }).id;
+    const { limit, offset } = listQuery(req, MAX_FRAME_LIMIT);
     const rows = db
       .select()
       .from(signalFrames)
       .where(eq(signalFrames.sessionId, id))
       .orderBy(signalFrames.createdAt)
+      .limit(Math.min(limit, MAX_FRAME_LIMIT))
+      .offset(offset)
       .all();
     // Add `timestamp` alias and relative offset from call start for UI
     const call = db.select().from(callSessions).where(eq(callSessions.id, id)).get();
@@ -243,7 +282,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
     const qVec = embedded[0];
 
     // Load all chunk embeddings — fine for <10k calls; swap for sqlite-vss later.
-    const rows = db.select().from(transcriptEmbeddings).all();
+    const rows = db.select().from(transcriptEmbeddings).limit(MAX_SEARCH_CHUNKS).all();
     const scored = rows.map(r => ({
       sessionId: r.sessionId,
       chunkIndex: r.chunkIndex,

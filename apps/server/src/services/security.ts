@@ -36,10 +36,12 @@ function tokenFromRequest(req: FastifyRequest): string | null {
   const headerToken = req.headers['x-signal-token'];
   if (typeof headerToken === 'string') return headerToken.trim();
 
-  const queryToken = (req.query as { token?: unknown } | undefined)?.token;
-  if (typeof queryToken === 'string') return queryToken.trim();
-
   return parseCookie(req.headers.cookie)[AUTH_COOKIE] ?? null;
+}
+
+function tokenFromQuery(req: FastifyRequest): string | null {
+  const queryToken = (req.query as { token?: unknown } | undefined)?.token;
+  return typeof queryToken === 'string' ? queryToken.trim() : null;
 }
 
 function base64UrlDecode(value: string): string | null {
@@ -132,17 +134,20 @@ export async function registerSecurity(app: FastifyInstance, opts: SecurityOptio
   app.addHook('onRequest', async (req, reply) => {
     if (isPublicPath(req.url)) return;
 
+    const queryToken = tokenFromQuery(req);
+    if (
+      req.method === 'GET' &&
+      req.url.startsWith('/dashboard/') &&
+      queryToken &&
+      safeTokenEqual(queryToken, authToken)
+    ) {
+      reply.header('set-cookie', authCookie(authToken, opts.secureCookies ?? false));
+      return reply.redirect(cleanTokenFromUrl(req.url), 302);
+    }
+
     const token = tokenFromRequest(req);
     if (!token || !safeTokenEqual(token, authToken)) {
       return reply.code(401).send({ error: 'unauthorized' });
-    }
-
-    const queryToken = (req.query as { token?: unknown } | undefined)?.token;
-    if (typeof queryToken === 'string' && safeTokenEqual(queryToken, authToken)) {
-      reply.header('set-cookie', authCookie(authToken, opts.secureCookies ?? false));
-      if (req.method === 'GET' && req.url.startsWith('/dashboard/')) {
-        return reply.redirect(cleanTokenFromUrl(req.url), 302);
-      }
     }
   });
 }

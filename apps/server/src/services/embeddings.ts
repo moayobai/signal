@@ -11,6 +11,7 @@
 
 const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings';
 const VOYAGE_MODEL = 'voyage-3-lite';
+const VOYAGE_TIMEOUT_MS = 10_000;
 
 /** Treat the scaffold placeholder as "no key" so we don't hit the API with junk. */
 export function isPlaceholderVoyageKey(key: string | undefined | null): boolean {
@@ -29,9 +30,12 @@ interface VoyageResponse {
 export async function embed(texts: string[], apiKey: string): Promise<number[][] | null> {
   if (isPlaceholderVoyageKey(apiKey)) return null;
   if (texts.length === 0) return [];
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), VOYAGE_TIMEOUT_MS);
   try {
     const res = await fetch(VOYAGE_URL, {
       method: 'POST',
+      signal: ac.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
@@ -52,6 +56,8 @@ export async function embed(texts: string[], apiKey: string): Promise<number[][]
   } catch (err) {
     console.error('[SIGNAL] Voyage embed error:', err);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

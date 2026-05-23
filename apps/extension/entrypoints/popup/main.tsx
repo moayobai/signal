@@ -38,6 +38,7 @@ function Popup() {
     linkedinUrl: '',
   });
   const [summary, setSummary] = useState<PostCallSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [connection, setConnection] = useState<SignalConnectionConfig>(DEFAULT_CONNECTION);
   const [showSettings, setShowSettings] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -45,11 +46,12 @@ function Popup() {
   // Load last detected prospect + any stored summary
   useEffect(() => {
     chrome.storage.session
-      .get(['detectedProspect', 'latestSummary', 'popupView'])
+      .get(['detectedProspect', 'latestSummary', 'summaryError', 'popupView'])
       .then((d: Record<string, unknown>) => {
         const detectedProspect = d.detectedProspect;
         if (isProspect(detectedProspect)) setProspect(p => ({ ...p, ...detectedProspect }));
         if (d.latestSummary) setSummary(d.latestSummary as PostCallSummary);
+        if (typeof d.summaryError === 'string') setSummaryError(d.summaryError);
         if (d.popupView === 'post') setView('post');
       });
     readSignalConnectionConfig(DEFAULT_CONNECTION)
@@ -99,11 +101,15 @@ function Popup() {
           summary={summary}
           onNewCall={() => {
             setSummary(null);
+            setSummaryError(null);
             setView('pre');
+            chrome.storage.session
+              .set({ latestSummary: null, summaryError: null, popupView: 'pre' })
+              .catch(() => {});
           }}
         />
       ) : (
-        <div className="empty">No summary available.</div>
+        <div className="empty">{summaryError ?? 'No summary available.'}</div>
       )}
     </div>
   );

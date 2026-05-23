@@ -55,11 +55,11 @@ describe('security', () => {
     await app.close();
   });
 
-  it('sets an auth cookie when the query token is valid', async () => {
+  it('rejects query tokens outside dashboard login URLs', async () => {
     const app = await buildSecuredApp();
     const res = await app.inject({ method: 'GET', url: '/api/private?token=test-token' });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['set-cookie']).toContain('signal_auth=');
+    expect(res.statusCode).toBe(401);
+    expect(res.headers['set-cookie']).toBeUndefined();
     await app.close();
   });
 
@@ -80,7 +80,7 @@ describe('security', () => {
     });
     app.get('/api/private', async () => ({ ok: true }));
     await app.ready();
-    const res = await app.inject({ method: 'GET', url: '/api/private?token=test-token' });
+    const res = await app.inject({ method: 'GET', url: '/dashboard/?token=test-token' });
     expect(res.headers['set-cookie']).toContain('Secure');
     await app.close();
   });

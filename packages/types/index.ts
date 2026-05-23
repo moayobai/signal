@@ -125,5 +125,6 @@ export type ServerMessage =
   | { type: 'frame'; frame: SignalFrame }
   | { type: 'state'; overlayState: OverlayState }
   | { type: 'summary'; summary: PostCallSummary }
+  | { type: 'summary_unavailable'; message: string }
   | { type: 'scorecard'; scorecard: CallScorecard }
   | { type: 'error'; message: string };

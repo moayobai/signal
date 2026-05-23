@@ -40,9 +40,9 @@ export function createHumeClient(opts: HumeClientOptions): HumeHandle {
     return NOOP_HANDLE;
   }
 
-  // apiKey passed as query param (browser-WebSocket-compatible, avoids header limitation)
-  const url = `${HUME_WS_URL}?apiKey=${encodeURIComponent(opts.apiKey)}`;
-  const ws = new WebSocket(url);
+  const ws = new WebSocket(HUME_WS_URL, {
+    headers: { 'X-Hume-Api-Key': opts.apiKey },
+  });
   let ready = false;
   const queue: string[] = [];
 

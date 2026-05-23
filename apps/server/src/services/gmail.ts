@@ -4,23 +4,10 @@
  * one-off `scripts/google-oauth.mjs` flow.
  */
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+import { fetchWithTimeout, isBlank, refreshGoogleAccessToken } from './google-auth.js';
+
 const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const TIMEOUT_MS = 10_000;
-
-async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ms);
-  try {
-    return await fetch(url, { ...init, signal: ac.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function isBlank(v: string | undefined): boolean {
-  return !v || v.trim() === '' || v.startsWith('your-');
-}
 
 export interface RefreshTokenOpts {
   clientId: string;
@@ -29,36 +16,7 @@ export interface RefreshTokenOpts {
 }
 
 export async function refreshAccessToken(opts: RefreshTokenOpts): Promise<string | null> {
-  if (isBlank(opts.clientId) || isBlank(opts.clientSecret) || isBlank(opts.refreshToken)) {
-    return null;
-  }
-  try {
-    const body = new URLSearchParams({
-      client_id: opts.clientId,
-      client_secret: opts.clientSecret,
-      refresh_token: opts.refreshToken,
-      grant_type: 'refresh_token',
-    });
-    const res = await fetchWithTimeout(
-      TOKEN_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      },
-      TIMEOUT_MS,
-    );
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      console.error('[SIGNAL] Gmail token refresh failed:', res.status, txt);
-      return null;
-    }
-    const data = (await res.json()) as { access_token?: string };
-    return data.access_token ?? null;
-  } catch (err) {
-    console.error('[SIGNAL] Gmail token refresh failed:', err);
-    return null;
-  }
+  return refreshGoogleAccessToken(opts, 'Gmail');
 }
 
 export interface FetchRecentSentEmailsOpts {
@@ -141,7 +99,7 @@ export async function fetchRecentSentEmails(
   opts: FetchRecentSentEmailsOpts,
 ): Promise<SentEmail[] | null> {
   if (isBlank(opts.accessToken)) return null;
-  const limit = opts.limit ?? 20;
+  const limit = Math.max(1, Math.min(opts.limit ?? 20, 50));
   const headers = { Authorization: `Bearer ${opts.accessToken}` };
 
   try {
@@ -157,21 +115,22 @@ export async function fetchRecentSentEmails(
     const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
     if (!list.messages) return [];
 
-    const results: SentEmail[] = [];
-    for (const { id } of list.messages) {
-      const msgRes = await fetchWithTimeout(
-        `${GMAIL_BASE}/messages/${id}?format=full`,
-        { headers },
-        TIMEOUT_MS,
-      );
-      if (!msgRes.ok) continue;
-      const msg = (await msgRes.json()) as GmailMessage;
-      const subject = extractHeader(msg.payload, 'Subject');
-      const body = extractBody(msg.payload);
-      const sentAt = msg.internalDate ? Number(msg.internalDate) : 0;
-      results.push({ subject, body, sentAt });
-    }
-    return results;
+    const results = await Promise.all(
+      list.messages.slice(0, limit).map(async ({ id }): Promise<SentEmail | null> => {
+        const msgRes = await fetchWithTimeout(
+          `${GMAIL_BASE}/messages/${id}?format=full`,
+          { headers },
+          TIMEOUT_MS,
+        );
+        if (!msgRes.ok) return null;
+        const msg = (await msgRes.json()) as GmailMessage;
+        const subject = extractHeader(msg.payload, 'Subject');
+        const body = extractBody(msg.payload);
+        const sentAt = msg.internalDate ? Number(msg.internalDate) : 0;
+        return { subject, body, sentAt };
+      }),
+    );
+    return results.filter((sample): sample is SentEmail => sample !== null);
   } catch (err) {
     console.error('[SIGNAL] Gmail fetchRecentSentEmails failed:', err);
     return null;

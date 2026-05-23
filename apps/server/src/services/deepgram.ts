@@ -65,7 +65,8 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
   return {
     send: (chunk: Buffer) => {
       try {
-        connection.send(chunk.buffer as ArrayBufferLike);
+        const payload = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+        connection.send(payload as ArrayBufferLike);
       } catch (err) {
         console.error('[SIGNAL] Deepgram send error:', err);
       }

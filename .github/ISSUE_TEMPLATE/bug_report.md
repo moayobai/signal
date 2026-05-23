@@ -23,5 +23,5 @@ What actually happened.
 - OS:
 - Chrome version:
 - Node version:
-- AI provider (claude / openrouter):
+- AI provider (claude / openrouter / together):
 - Server logs (redact API keys):

@@ -24,6 +24,7 @@ let frameInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingStopCloseTimer: ReturnType<typeof setTimeout> | null = null;
 let activeStream: MediaStream | null = null;
+let activeCaptureCleanup: (() => void) | null = null;
 let activeTabId: number | null = null;
 let reconnectAttempt = 0;
 let intentionalStop = false;
@@ -179,41 +180,137 @@ function startCapture(sendResponse: (r: unknown) => void): void {
           chrome.tabCapture.capture(
             { audio: true, video: false },
             (audioStream: MediaStream | null) => {
-              if (!audioStream) {
-                captureState = 'idle';
-                sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
-                return;
-              }
-              if (intentionalStop || captureState !== 'starting') {
-                stopMediaStreamTracks(audioStream);
-                captureState = 'idle';
-                sendResponse({ error: 'Capture stopped before it started' });
-                return;
-              }
-              activeStream = audioStream;
-              captureState = 'active';
-              void connectWs(audioStream, config);
-              sendResponse({ ok: true });
+              handleCapturedStream(audioStream, config, sendResponse);
             },
           );
           return;
         }
-        if (intentionalStop || captureState !== 'starting') {
-          stopMediaStreamTracks(stream);
-          captureState = 'idle';
-          sendResponse({ error: 'Capture stopped before it started' });
-          return;
-        }
-        activeStream = stream;
-        captureState = 'active';
-        void connectWs(stream, config);
-        sendResponse({ ok: true });
+        handleCapturedStream(stream, config, sendResponse);
       });
     })
     .catch(() => {
       captureState = 'idle';
       sendResponse({ error: 'Invalid connection settings' });
     });
+}
+
+function handleCapturedStream(
+  tabStream: MediaStream | null,
+  config: SignalConnectionConfig,
+  sendResponse: (r: unknown) => void,
+): void {
+  if (!tabStream) {
+    captureState = 'idle';
+    sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
+    return;
+  }
+  if (intentionalStop || captureState !== 'starting') {
+    stopMediaStreamTracks(tabStream);
+    captureState = 'idle';
+    sendResponse({ error: 'Capture stopped before it started' });
+    return;
+  }
+
+  prepareCaptureStream(tabStream)
+    .then(prepared => {
+      if (intentionalStop || captureState !== 'starting') {
+        prepared.cleanup();
+        captureState = 'idle';
+        sendResponse({ error: 'Capture stopped before it started' });
+        return;
+      }
+      activeStream = prepared.stream;
+      activeCaptureCleanup = prepared.cleanup;
+      captureState = 'active';
+      void connectWs(prepared.stream, config);
+      sendResponse({ ok: true, mic: prepared.micEnabled });
+    })
+    .catch(err => {
+      console.error('[SIGNAL] failed to prepare capture stream:', err);
+      stopMediaStreamTracks(tabStream);
+      captureState = 'idle';
+      sendResponse({ error: 'Unable to prepare audio capture' });
+    });
+}
+
+interface PreparedCaptureStream {
+  stream: MediaStream;
+  cleanup: () => void;
+  micEnabled: boolean;
+}
+
+async function prepareCaptureStream(tabStream: MediaStream): Promise<PreparedCaptureStream> {
+  const micStream = await getMicrophoneStream();
+  if (!micStream) {
+    return {
+      stream: tabStream,
+      cleanup: () => stopMediaStreamTracks(tabStream),
+      micEnabled: false,
+    };
+  }
+
+  const AudioContextCtor =
+    globalThis.AudioContext ??
+    (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    const stream = new MediaStream([
+      ...tabStream.getAudioTracks(),
+      ...micStream.getAudioTracks(),
+      ...tabStream.getVideoTracks(),
+    ]);
+    return {
+      stream,
+      cleanup: () => {
+        stopMediaStreamTracks(stream);
+        stopMediaStreamTracks(tabStream);
+        stopMediaStreamTracks(micStream);
+      },
+      micEnabled: true,
+    };
+  }
+
+  const audioContext = new AudioContextCtor();
+  const destination = audioContext.createMediaStreamDestination();
+  const tabSource = tabStream.getAudioTracks().length
+    ? audioContext.createMediaStreamSource(tabStream)
+    : null;
+  const micSource = micStream.getAudioTracks().length
+    ? audioContext.createMediaStreamSource(micStream)
+    : null;
+  tabSource?.connect(destination);
+  micSource?.connect(destination);
+
+  const stream = new MediaStream([
+    ...destination.stream.getAudioTracks(),
+    ...tabStream.getVideoTracks(),
+  ]);
+  return {
+    stream,
+    cleanup: () => {
+      stopMediaStreamTracks(stream);
+      stopMediaStreamTracks(tabStream);
+      stopMediaStreamTracks(micStream);
+      void audioContext.close().catch(() => {});
+    },
+    micEnabled: true,
+  };
+}
+
+async function getMicrophoneStream(): Promise<MediaStream | null> {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) return null;
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+  } catch (err) {
+    console.warn('[SIGNAL] microphone capture unavailable, falling back to tab audio:', err);
+    return null;
+  }
 }
 
 async function connectWs(stream: MediaStream, config: SignalConnectionConfig): Promise<void> {
@@ -226,7 +323,7 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
     ])) as Record<string, any>;
   } catch {
     captureState = 'idle';
-    stopMediaStreamTracks(stream);
+    stopMediaStream();
     return;
   }
   const prospect: Prospect = isProspect(stored.pendingProspect)
@@ -239,7 +336,10 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
     ? stored.pendingPlatform
     : 'meet';
 
-  if (intentionalStop) return;
+  if (intentionalStop) {
+    stopMediaStream();
+    return;
+  }
 
   const ws = new WebSocket(
     wsUrlFromServerUrl(config.serverUrl),
@@ -262,7 +362,19 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
         chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
       }
       if (msg.type === 'summary') {
-        chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
+        chrome.storage.session.set({
+          latestSummary: msg.summary,
+          summaryError: null,
+          popupView: 'post',
+        });
+        closeSocketAfterStop(250);
+      }
+      if (msg.type === 'summary_unavailable') {
+        chrome.storage.session.set({
+          latestSummary: null,
+          summaryError: msg.message,
+          popupView: 'post',
+        });
         closeSocketAfterStop(250);
       }
       if (msg.type === 'state' && msg.overlayState === 'POSTCALL') {
@@ -301,7 +413,9 @@ async function connectWs(stream: MediaStream, config: SignalConnectionConfig): P
 function startRecorder(stream: MediaStream, ws: WebSocket): void {
   const mimeType = 'audio/webm;codecs=opus';
   if (!MediaRecorder.isTypeSupported(mimeType)) return;
-  const rec = new MediaRecorder(stream, { mimeType });
+  const audioStream = new MediaStream(stream.getAudioTracks());
+  if (audioStream.getAudioTracks().length === 0) return;
+  const rec = new MediaRecorder(audioStream, { mimeType });
   recorder = rec;
   rec.ondataavailable = e => {
     if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
@@ -364,6 +478,8 @@ function stopRecorder(): void {
 }
 
 function stopMediaStream(): void {
+  activeCaptureCleanup?.();
+  activeCaptureCleanup = null;
   stopMediaStreamTracks(activeStream);
   activeStream = null;
 }

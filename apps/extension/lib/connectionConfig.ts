@@ -56,14 +56,6 @@ export function serverOriginPattern(serverUrl: string): string {
   return `${url.origin}/*`;
 }
 
-export function authenticatedWsUrl(wsUrl: string, authToken: string): string {
-  const token = authToken.trim();
-  if (!token) return wsUrl;
-  const url = new URL(wsUrl);
-  url.searchParams.set('token', token);
-  return url.toString();
-}
-
 export async function readSignalConnectionConfig(
   defaults: SignalConnectionConfig,
 ): Promise<SignalConnectionConfig> {
