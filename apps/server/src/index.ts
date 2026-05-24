@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
+import type { FastifyServerOptions } from 'fastify';
 import websocketPlugin from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
@@ -7,16 +8,18 @@ import { dirname, join } from 'node:path';
 import { registerWsRoute } from './routes/ws.js';
 import { registerApiRoutes } from './routes/api.js';
 import { initDb } from './services/db.js';
-import { createAIProvider } from './services/ai.js';
+import { createAIProvider, type AIProviderName } from './services/ai.js';
 import { createCalendarProvider } from './services/calendar.js';
 import { startCalendarPoller } from './services/calendar-poller.js';
 import { registerSecurity } from './services/security.js';
 import type { CallFramework } from '@signal/types';
 
 const PORT = Number(process.env.PORT ?? 8080);
-const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'claude') as 'claude' | 'openrouter';
+const AI_PROVIDER = (process.env.AI_PROVIDER ?? 'claude') as AIProviderName;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? 'sk-ant-your-key-here';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? 'sk-or-your-key-here';
+const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY ?? 'together-your-key-here';
+const TOGETHER_BASE_URL = process.env.TOGETHER_BASE_URL ?? 'https://api.together.ai/v1';
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY ?? 'your-deepgram-key-here';
 const DEEPGRAM_MODEL = process.env.DEEPGRAM_MODEL ?? 'nova-3';
 const OCTAMEM_API_KEY = process.env.OCTAMEM_API_KEY ?? 'your-octamem-key-here';
@@ -26,12 +29,19 @@ const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL ?? 'your-slack-webhook-u
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY ?? 'your-hubspot-key-here';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? '';
 const DATABASE_URL = process.env.DATABASE_URL ?? './signal.db';
-const LIVE_MODEL = process.env.LIVE_MODEL ?? 'claude-haiku-4-5-20251001';
-const SUMMARY_MODEL = process.env.SUMMARY_MODEL ?? 'claude-sonnet-4-6';
+const LIVE_MODEL =
+  process.env.LIVE_MODEL ??
+  (AI_PROVIDER === 'together' ? 'openai/gpt-oss-20b' : 'claude-haiku-4-5-20251001');
+const SUMMARY_MODEL =
+  process.env.SUMMARY_MODEL ??
+  (AI_PROVIDER === 'together' ? 'openai/gpt-oss-20b' : 'claude-sonnet-4-6');
 const SCORING_FRAMEWORK = (process.env.SCORING_FRAMEWORK ?? 'MEDDIC') as CallFramework;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_REFRESH_TOKEN_CALENDAR = process.env.GOOGLE_REFRESH_TOKEN_CALENDAR ?? '';
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET ?? '';
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN ?? '';
 const OUTLOOK_CLIENT_ID = process.env.OUTLOOK_CLIENT_ID ?? '';
 const OUTLOOK_CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET ?? '';
 const OUTLOOK_REFRESH_TOKEN = process.env.OUTLOOK_REFRESH_TOKEN ?? '';
@@ -40,16 +50,60 @@ const SIGNAL_AUTH_TOKEN = process.env.SIGNAL_AUTH_TOKEN ?? '';
 const SIGNAL_AUTH_DISABLED = process.env.SIGNAL_AUTH_DISABLED === 'true';
 const SIGNAL_RATE_LIMIT_MAX = Number(process.env.SIGNAL_RATE_LIMIT_MAX ?? 120);
 const SIGNAL_RATE_LIMIT_WINDOW = process.env.SIGNAL_RATE_LIMIT_WINDOW ?? '1 minute';
+const SIGNAL_BODY_LIMIT_BYTES = Number(process.env.SIGNAL_BODY_LIMIT_BYTES ?? 1_048_576);
+const SIGNAL_WS_MAX_MESSAGE_BYTES = Number(process.env.SIGNAL_WS_MAX_MESSAGE_BYTES ?? 1_048_576);
+const SIGNAL_DB_BACKUP_DIR = process.env.SIGNAL_DB_BACKUP_DIR ?? '';
+const SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS =
+  process.env.SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS !== 'false';
+
+function redactSensitiveUrl(url: string): string {
+  try {
+    const parsed = new URL(url, 'http://signal.local');
+    if (parsed.searchParams.has('token')) parsed.searchParams.set('token', '[redacted]');
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return url.replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
+  }
+}
+
+const logger: FastifyServerOptions['logger'] = {
+  ...(process.env.NODE_ENV === 'production'
+    ? {}
+    : { transport: { target: 'pino-pretty', options: { colorize: true } } }),
+  serializers: {
+    req(req: {
+      method?: string;
+      url?: string;
+      headers?: Record<string, unknown>;
+      socket?: { remoteAddress?: string; remotePort?: number };
+    }) {
+      return {
+        method: req.method,
+        url: redactSensitiveUrl(req.url ?? ''),
+        host: typeof req.headers?.host === 'string' ? req.headers.host : undefined,
+        remoteAddress: req.socket?.remoteAddress,
+        remotePort: req.socket?.remotePort,
+      };
+    },
+  },
+  redact: ['req.headers.authorization', 'req.headers.cookie'],
+};
 
 const app = Fastify({
-  logger: { transport: { target: 'pino-pretty', options: { colorize: true } } },
+  logger,
+  bodyLimit: SIGNAL_BODY_LIMIT_BYTES,
 });
 
-const db = initDb(DATABASE_URL);
+const db = initDb(DATABASE_URL, {
+  backupDir: SIGNAL_DB_BACKUP_DIR || undefined,
+  backupBeforeMigrations: SIGNAL_DB_BACKUP_BEFORE_MIGRATIONS,
+});
 const ai = createAIProvider({
   provider: AI_PROVIDER,
   anthropicApiKey: ANTHROPIC_API_KEY,
   openrouterApiKey: OPENROUTER_API_KEY,
+  togetherApiKey: TOGETHER_API_KEY,
+  togetherBaseUrl: TOGETHER_BASE_URL,
 });
 
 await registerSecurity(app, {
@@ -57,6 +111,7 @@ await registerSecurity(app, {
   authDisabled: SIGNAL_AUTH_DISABLED,
   rateLimitMax: SIGNAL_RATE_LIMIT_MAX,
   rateLimitWindow: SIGNAL_RATE_LIMIT_WINDOW,
+  secureCookies: process.env.NODE_ENV === 'production',
 });
 await app.register(websocketPlugin);
 
@@ -77,7 +132,8 @@ app.setNotFoundHandler((req, reply) => {
 app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
 registerWsRoute(app, {
-  db, ai,
+  db,
+  ai,
   deepgramApiKey: DEEPGRAM_API_KEY,
   deepgramModel: DEEPGRAM_MODEL,
   humeApiKey: HUME_API_KEY,
@@ -89,6 +145,18 @@ registerWsRoute(app, {
   summaryModel: SUMMARY_MODEL,
   scoringFramework: SCORING_FRAMEWORK,
   publicBaseUrl: PUBLIC_BASE_URL || undefined,
+  maxMessageBytes: SIGNAL_WS_MAX_MESSAGE_BYTES,
+  gmail: {
+    clientId: GMAIL_CLIENT_ID,
+    clientSecret: GMAIL_CLIENT_SECRET,
+    refreshToken: GMAIL_REFRESH_TOKEN,
+  },
+  outlook: {
+    clientId: OUTLOOK_CLIENT_ID,
+    clientSecret: OUTLOOK_CLIENT_SECRET,
+    refreshToken: OUTLOOK_REFRESH_TOKEN,
+    tenantId: OUTLOOK_TENANT_ID,
+  },
 });
 registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY, voyageApiKey: VOYAGE_API_KEY });
 
@@ -124,14 +192,20 @@ const calendarPoller = calendarProvider
       provider: calendarProvider,
       db,
       logger: {
-        info: (m) => app.log.info(m),
+        info: m => app.log.info(m),
         error: (m, err) => app.log.error({ err }, m),
       },
     })
   : null;
 
-process.on('SIGTERM', () => { calendarPoller?.stop(); void shutdown('SIGTERM'); });
-process.on('SIGINT',  () => { calendarPoller?.stop(); void shutdown('SIGINT'); });
+process.on('SIGTERM', () => {
+  calendarPoller?.stop();
+  void shutdown('SIGTERM');
+});
+process.on('SIGINT', () => {
+  calendarPoller?.stop();
+  void shutdown('SIGINT');
+});
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' });
@@ -142,12 +216,21 @@ try {
   if (AI_PROVIDER === 'openrouter' && OPENROUTER_API_KEY.startsWith('sk-or-your-key')) {
     app.log.warn('[SIGNAL] OPENROUTER_API_KEY is placeholder — AI disabled');
   }
-  if (DEEPGRAM_API_KEY.startsWith('your-deepgram')) app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
-  if (OCTAMEM_API_KEY.startsWith('your-octamem')) app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
-  if (HUME_API_KEY.startsWith('your-hume')) app.log.warn('[SIGNAL] HUME_API_KEY is placeholder — face emotion analysis disabled');
-  if (VOYAGE_API_KEY.startsWith('your-voyage')) app.log.warn('[SIGNAL] VOYAGE_API_KEY is placeholder — semantic transcript search disabled');
-  if (SLACK_WEBHOOK_URL.startsWith('your-slack')) app.log.warn('[SIGNAL] SLACK_WEBHOOK_URL is placeholder — Slack posting disabled');
-  if (HUBSPOT_API_KEY.startsWith('your-hubspot')) app.log.warn('[SIGNAL] HUBSPOT_API_KEY is placeholder — HubSpot sync disabled');
+  if (AI_PROVIDER === 'together' && TOGETHER_API_KEY.startsWith('together-your-key')) {
+    app.log.warn('[SIGNAL] TOGETHER_API_KEY is placeholder — AI disabled');
+  }
+  if (DEEPGRAM_API_KEY.startsWith('your-deepgram'))
+    app.log.warn('[SIGNAL] DEEPGRAM_API_KEY is placeholder — STT disabled');
+  if (OCTAMEM_API_KEY.startsWith('your-octamem'))
+    app.log.warn('[SIGNAL] OCTAMEM_API_KEY is placeholder — memory disabled');
+  if (HUME_API_KEY.startsWith('your-hume'))
+    app.log.warn('[SIGNAL] HUME_API_KEY is placeholder — face emotion analysis disabled');
+  if (VOYAGE_API_KEY.startsWith('your-voyage'))
+    app.log.warn('[SIGNAL] VOYAGE_API_KEY is placeholder — semantic transcript search disabled');
+  if (SLACK_WEBHOOK_URL.startsWith('your-slack'))
+    app.log.warn('[SIGNAL] SLACK_WEBHOOK_URL is placeholder — Slack posting disabled');
+  if (HUBSPOT_API_KEY.startsWith('your-hubspot'))
+    app.log.warn('[SIGNAL] HUBSPOT_API_KEY is placeholder — HubSpot sync disabled');
   if (!SIGNAL_AUTH_DISABLED) app.log.info('[SIGNAL] HTTP auth enabled');
   if (!calendarProvider) {
     app.log.warn('[SIGNAL] No calendar provider configured — pre-call meeting detection disabled');

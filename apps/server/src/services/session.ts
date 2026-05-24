@@ -1,6 +1,15 @@
 import type { TranscriptLine, CallType } from '@signal/types';
 
-const PRICING_KEYWORDS = ['price', 'cost', 'expensive', 'budget', 'afford', 'pricing', 'roi', 'investment'];
+const PRICING_KEYWORDS = [
+  'price',
+  'cost',
+  'expensive',
+  'budget',
+  'afford',
+  'pricing',
+  'roi',
+  'investment',
+];
 const SILENCE_THRESHOLD_MS = 30_000;
 const WINDOW_DURATION_MS = 90_000;
 

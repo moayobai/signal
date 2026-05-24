@@ -18,7 +18,8 @@ export function SentimentRing({ value, size = 64, stroke = 5, showLabel = true }
   const v = value == null ? 0 : Math.max(0, Math.min(100, value));
   const offset = c * (1 - v / 100);
 
-  const tone = value == null ? 'ring-neutral' : v >= 70 ? 'ring-pos' : v >= 50 ? 'ring-neutral' : 'ring-neg';
+  const tone =
+    value == null ? 'ring-neutral' : v >= 70 ? 'ring-pos' : v >= 50 ? 'ring-neutral' : 'ring-neg';
   const labelSize = Math.max(11, Math.round(size / 4.2));
   const useGradient = value != null && v > 80;
   // Per-instance gradient id so multiple rings on a page don't collide.

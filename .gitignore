@@ -18,5 +18,9 @@ dist/
 apps/server/public/assets/
 apps/server/public/index.html
 apps/server/dist/
+apps/server/backups/
 apps/server/signal.db
 apps/server/signal.db-*
+apps/server/signal.*.db
+apps/server/signal.*.db-*
+test-results/

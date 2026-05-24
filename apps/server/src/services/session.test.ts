@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CallSession } from './session.js';
 
 describe('CallSession — rolling window', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('keeps lines within 90s window', () => {
     const session = new CallSession('meet', 'enterprise');
@@ -30,8 +34,12 @@ describe('CallSession — rolling window', () => {
 });
 
 describe('CallSession — danger detection', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('detects silence after 30s', () => {
     const session = new CallSession('meet', 'enterprise');

@@ -1,14 +1,19 @@
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { CallType } from '@signal/types';
 
 function loadCompanyContext(): string {
-  try {
-    const p = join(process.cwd(), 'knowledge', 'company.md');
-    return readFileSync(p, 'utf-8');
-  } catch {
-    return '(no company context loaded)';
+  const candidates = [
+    process.env.SIGNAL_KNOWLEDGE_DIR ? join(process.env.SIGNAL_KNOWLEDGE_DIR, 'company.md') : null,
+    join(process.cwd(), 'knowledge', 'company.md'),
+    join(process.cwd(), '..', '..', 'knowledge', 'company.md'),
+  ].filter((path): path is string => Boolean(path));
+
+  for (const path of candidates) {
+    if (existsSync(path)) return readFileSync(path, 'utf-8');
   }
+
+  return '(no company context loaded)';
 }
 
 const COMPANY_CONTEXT = loadCompanyContext();
@@ -54,13 +59,15 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
   - energy → "high" if enthusiastic word choice, exclamations, fast back-and-forth; "declining" if response length shortens over time
   - tone → "positive" if affirming language; "resistant" if objection phrases ("but", "however", "not sure"); "hesitant" if hedging ("maybe", "we'll see", "I'd have to check")
 - If no action needed: type = "IDLE", isNudge = false, confidence = 0.1
+- If the prospect asks a product, pricing, security, integration, migration, or implementation question, prioritize an answer card: type = "ASK", text starts with "Say:" and gives the rep a concise, accurate response grounded only in Company Context and Prior Context.
+- If Company Context does not contain the answer, prompt the rep to acknowledge and commit to a follow-up instead of guessing.
 - dangerFlag: true only for pricing objection, competitor mention, or >30s silence
 - timestamp: current unix milliseconds`;
 }
 
-export function buildUserPrompt(transcript: Array<{ speaker: string; text: string; timestamp: number }>): string {
-  const lines = transcript
-    .map(l => `[${l.speaker.toUpperCase()}] ${l.text}`)
-    .join('\n');
+export function buildUserPrompt(
+  transcript: Array<{ speaker: string; text: string; timestamp: number }>,
+): string {
+  const lines = transcript.map(l => `[${l.speaker.toUpperCase()}] ${l.text}`).join('\n');
   return `Transcript (last 90s):\n${lines}\n\nReturn the SignalFrame JSON now.`;
 }

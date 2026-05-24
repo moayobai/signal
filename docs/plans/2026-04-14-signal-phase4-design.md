@@ -1,4 +1,5 @@
 # SIGNAL — Phase 4 Design Doc
+
 **Date:** 2026-04-14
 **Scope:** Post-call summary · CRM · Call history + analytics · OctaMem integration · Extension popup · Web dashboard · Provider-agnostic AI
 **Goal:** Close the pre/post call loop via OctaMem, persist every call to SQLite, surface insights in a web dashboard and extension popup.
@@ -7,18 +8,18 @@
 
 ## Decisions
 
-| Decision | Choice | Reason |
-|---|---|---|
-| Server architecture | Monolith expansion | Self-hosted, single user — one `fly deploy` covers everything |
-| Database | SQLite via Drizzle ORM | Persistent Fly volume, zero extra infra, perfect for single-user |
-| Dashboard | Vite + React SPA in `apps/server/dashboard/` | Built to `apps/server/public/`, served by `@fastify/static` |
-| AI provider | Pluggable: Claude direct or OpenRouter | Open-source BYOK — users choose their provider |
-| Live nudge model | `claude-haiku-4-5-20251001` (default) | ~400ms TTFT, structured JSON reliable |
-| Summary model | `claude-sonnet-4-6` (default) | One-shot reasoning for post-call synthesis |
-| LinkedIn | Manual URL paste | Zero API cost, zero ToS risk, sufficient for personal use |
-| Prospect detection | Hybrid DOM scrape + manual popup fallback | Best-effort auto, always correctable |
-| OctaMem | Natural language add + query via REST API | Semantic memory — compounds across every call |
-| Auth | None — self-hosted, single user | Open source: each user owns their instance |
+| Decision            | Choice                                       | Reason                                                           |
+| ------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| Server architecture | Monolith expansion                           | Self-hosted, single user — one `fly deploy` covers everything    |
+| Database            | SQLite via Drizzle ORM                       | Persistent Fly volume, zero extra infra, perfect for single-user |
+| Dashboard           | Vite + React SPA in `apps/server/dashboard/` | Built to `apps/server/public/`, served by `@fastify/static`      |
+| AI provider         | Pluggable: Claude direct or OpenRouter       | Open-source BYOK — users choose their provider                   |
+| Live nudge model    | `claude-haiku-4-5-20251001` (default)        | ~400ms TTFT, structured JSON reliable                            |
+| Summary model       | `claude-sonnet-4-6` (default)                | One-shot reasoning for post-call synthesis                       |
+| LinkedIn            | Manual URL paste                             | Zero API cost, zero ToS risk, sufficient for personal use        |
+| Prospect detection  | Hybrid DOM scrape + manual popup fallback    | Best-effort auto, always correctable                             |
+| OctaMem             | Natural language add + query via REST API    | Semantic memory — compounds across every call                    |
+| Auth                | None — self-hosted, single user              | Open source: each user owns their instance                       |
 
 ---
 
@@ -215,27 +216,28 @@ NODE_ENV=development
 ```ts
 // Pre-call: query for prospect context
 async function queryProspectContext(prospect: {
-  name: string
-  company?: string
-}): Promise<string | null>
+  name: string;
+  company?: string;
+}): Promise<string | null>;
 // → octamem_query("name + company — what do we know?")
 // → returns string injected into Claude system prompt
 // → null if OCTAMEM_API_KEY is placeholder (graceful no-op)
 
 // Post-call: push call memory
 async function storeCallMemory(opts: {
-  contact: { name: string; company?: string; role?: string }
-  callType: CallType
-  durationMs: number
-  sentimentAvg: number
-  summary: PostCallSummary
-  dangerMoments: Array<{ reason: string; timestamp: number }>
-}): Promise<string | null>
+  contact: { name: string; company?: string; role?: string };
+  callType: CallType;
+  durationMs: number;
+  sentimentAvg: number;
+  summary: PostCallSummary;
+  dangerMoments: Array<{ reason: string; timestamp: number }>;
+}): Promise<string | null>;
 // → octamem_add(formatted memory string, previousContext)
 // → returns OctaMem memory ID (stored in contacts.octamem_id)
 ```
 
 **Memory format pushed post-call:**
+
 ```
 Call: {name} ({role}, {company}) — {date}, {duration} min, {callType}
 Sentiment: {avg}/100
@@ -249,10 +251,12 @@ Danger moments: {list with timestamps}
 ```
 
 **System prompt injection (pre-call):**
+
 ```
 ## Prior Context on This Prospect
 {octamem_query_result}
 ```
+
 Appended after `company.md` block. Empty string if no prior context found.
 
 ---
@@ -263,10 +267,10 @@ Appended after `company.md` block. Empty string if no prior context found.
 
 ```ts
 const SELECTORS = {
-  meet:  '.zWGUib',                           // participant name chips
-  zoom:  '.participants-entry__name',
+  meet: '.zWGUib', // participant name chips
+  zoom: '.participants-entry__name',
   teams: '[data-tid="roster-participant"]',
-}
+};
 ```
 
 ### Flow
@@ -283,17 +287,17 @@ const SELECTORS = {
 ```ts
 type ClientMessage =
   | {
-      type: 'start'
-      platform: 'meet' | 'zoom' | 'teams'
-      callType: CallType
+      type: 'start';
+      platform: 'meet' | 'zoom' | 'teams';
+      callType: CallType;
       prospect: {
-        name: string
-        company?: string
-        email?: string
-        linkedinUrl?: string
-      }
+        name: string;
+        company?: string;
+        email?: string;
+        linkedinUrl?: string;
+      };
     }
-  | { type: 'stop' }
+  | { type: 'stop' };
 ```
 
 ---
@@ -301,9 +305,11 @@ type ClientMessage =
 ## Post-Call Summary
 
 ### Trigger
+
 `stop` message received on WS connection.
 
 ### Server Flow (`routes/ws.ts` on stop)
+
 ```
 1. session.end()
 2. Fetch all transcript_lines for session from DB
@@ -317,10 +323,12 @@ type ClientMessage =
 ```
 
 ### Summary Prompt
+
 System: role + output schema (PostCallSummary JSON)
 User: full transcript (all lines, not rolling window) + call metadata
 
 ### Updated `ServerMessage`
+
 ```ts
 type ServerMessage =
   | { type: 'connected'; sessionId: string }
@@ -328,7 +336,7 @@ type ServerMessage =
   | { type: 'frame'; frame: SignalFrame }
   | { type: 'state'; overlayState: OverlayState }
   | { type: 'summary'; summary: PostCallSummary }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string };
 ```
 
 ---
@@ -336,6 +344,7 @@ type ServerMessage =
 ## Extension Popup
 
 ### Entry Points
+
 ```
 apps/extension/entrypoints/popup.html  — popup HTML shell
 apps/extension/entrypoints/popup.tsx   — React root
@@ -346,6 +355,7 @@ apps/extension/components/popup/       — popup components
 ```
 
 ### Pre-call UI
+
 ```
 [SIGNAL]
 
@@ -367,6 +377,7 @@ Call type  [● Investor] [Enterprise] [BD] [Customer]
 ```
 
 ### Post-call UI
+
 ```
 [SIGNAL — Call ended · 34 min]
 
@@ -400,20 +411,24 @@ Follow-up draft
 ### Pages
 
 **`/` — Home**
+
 - Last 10 calls list (name, company, type, duration, sentiment, date)
 - Stats: total calls, avg sentiment (30 days), most triggered prompt type
 
 **`/contacts` — CRM**
+
 - Searchable/sortable table: name, company, role, email, LinkedIn, last called, call count, avg sentiment
 - [+ New Contact] button
 
 **`/contacts/:id` — Contact detail**
+
 - Editable contact card
 - OctaMem panel: live `queryProspectContext()` on load — "What SIGNAL remembers"
 - Call history timeline with sentiment scores
 - Aggregated: top objections, top win signals, decisions across all calls
 
 **`/calls/:id` — Call detail**
+
 - Metadata header: date, duration, platform, call type, sentiment
 - Transcript panel: speaker-labelled, timestamped lines
 - Signal frames timeline: prompt type, text, confidence, danger flags
@@ -444,6 +459,7 @@ GET    /api/analytics/prompt-types     — which PromptTypes fired most
 ## Files Created / Modified
 
 ### New
+
 ```
 apps/server/src/services/ai.ts            — AIProvider interface + Claude + OpenRouter impls
 apps/server/src/services/octamem.ts       — OctaMem query + store
@@ -469,6 +485,7 @@ apps/extension/components/popup/OctaMemPanel.tsx
 ```
 
 ### Modified
+
 ```
 apps/server/src/services/claude.ts        — refactored to use AIProvider
 apps/server/src/routes/ws.ts              — accept prospect, persist data, generate summary on stop

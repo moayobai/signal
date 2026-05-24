@@ -4,19 +4,33 @@ import websocketPlugin from '@fastify/websocket';
 import WebSocket from 'ws';
 
 const deepgramMock = vi.hoisted(() => ({
-  options: null as null | { onTranscript: (line: { speaker: 'user' | 'prospect'; text: string; timestamp: number }) => void },
+  options: null as null | {
+    onTranscript: (line: { speaker: 'user' | 'prospect'; text: string; timestamp: number }) => void;
+  },
   send: vi.fn(),
   finish: vi.fn(),
 }));
 const summaryMock = vi.hoisted(() => ({
   generateSummary: vi.fn(),
 }));
+const gmailMock = vi.hoisted(() => ({
+  refreshAccessToken: vi.fn(),
+  fetchRecentSentEmails: vi.fn(),
+}));
+const outlookMock = vi.hoisted(() => ({
+  refreshOutlookAccessToken: vi.fn(),
+  fetchRecentOutlookSentEmails: vi.fn(),
+}));
 
 vi.mock('../services/deepgram.js', () => ({
-  createDeepgramClient: vi.fn((options) => {
+  createDeepgramClient: vi.fn(options => {
     deepgramMock.options = options;
     deepgramMock.send.mockImplementation(() => {
-      options.onTranscript({ speaker: 'user', text: 'We can run a pilot next week.', timestamp: Date.now() });
+      options.onTranscript({
+        speaker: 'user',
+        text: 'We can run a pilot next week.',
+        timestamp: Date.now(),
+      });
     });
     return { send: deepgramMock.send, finish: deepgramMock.finish };
   }),
@@ -28,13 +42,33 @@ vi.mock('../services/octamem.js', () => ({
 vi.mock('../services/summary.js', () => ({
   generateSummary: summaryMock.generateSummary,
 }));
+vi.mock('../services/gmail.js', () => ({
+  refreshAccessToken: gmailMock.refreshAccessToken,
+  fetchRecentSentEmails: gmailMock.fetchRecentSentEmails,
+}));
+vi.mock('../services/outlook.js', () => ({
+  refreshOutlookAccessToken: outlookMock.refreshOutlookAccessToken,
+  fetchRecentOutlookSentEmails: outlookMock.fetchRecentOutlookSentEmails,
+}));
 
 import { registerWsRoute } from './ws.js';
 import { initDb, callSessions, contacts, transcriptLines, callSummaries } from '../services/db.js';
 import { NoOpProvider } from '../services/ai.js';
 import { registerSecurity } from '../services/security.js';
 
-async function buildApp(options: { auth?: boolean } = {}) {
+async function buildApp(
+  options: {
+    auth?: boolean;
+    maxMessageBytes?: number;
+    gmail?: { clientId: string; clientSecret: string; refreshToken: string };
+    outlook?: {
+      clientId: string;
+      clientSecret: string;
+      refreshToken: string;
+      tenantId?: string;
+    };
+  } = {},
+) {
   const app = Fastify({ logger: false });
   if (options.auth) {
     await registerSecurity(app, {
@@ -57,14 +91,17 @@ async function buildApp(options: { auth?: boolean } = {}) {
     liveModel: 'claude-haiku-4-5-20251001',
     summaryModel: 'claude-sonnet-4-6',
     scoringFramework: 'MEDDIC',
+    maxMessageBytes: options.maxMessageBytes,
+    gmail: options.gmail,
+    outlook: options.outlook,
   });
   await app.ready();
   return { app, db };
 }
 
-function connectAndDrainConnected(address: string): Promise<WebSocket> {
-  return new Promise((resolve) => {
-    const ws = new WebSocket(address);
+function connectAndDrainConnected(address: string, protocols?: string[]): Promise<WebSocket> {
+  return new Promise(resolve => {
+    const ws = new WebSocket(address, protocols);
     ws.once('message', () => resolve(ws));
   });
 }
@@ -79,17 +116,23 @@ describe('WebSocket route', () => {
     deepgramMock.finish.mockReset();
     summaryMock.generateSummary.mockReset();
     summaryMock.generateSummary.mockResolvedValue(null);
+    gmailMock.refreshAccessToken.mockReset();
+    gmailMock.fetchRecentSentEmails.mockReset();
+    outlookMock.refreshOutlookAccessToken.mockReset();
+    outlookMock.fetchRecentOutlookSentEmails.mockReset();
     built = await buildApp();
     app = built.app;
     const listen = await app.listen({ port: 0 });
     address = `ws://localhost:${new URL(listen).port}/ws`;
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => {
+    await app.close();
+  });
 
   it('sends connected message on connect', async () => {
     const ws = new WebSocket(address);
-    const msg = await new Promise<string>((resolve) => {
-      ws.on('message', (d) => resolve(d.toString()));
+    const msg = await new Promise<string>(resolve => {
+      ws.on('message', d => resolve(d.toString()));
     });
     ws.close();
     expect(JSON.parse(msg).type).toBe('connected');
@@ -97,15 +140,51 @@ describe('WebSocket route', () => {
 
   it('handles start with prospect + stop', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'investor',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 100));
     ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
     expect(ws.readyState).toBe(WebSocket.OPEN);
     ws.close();
+  });
+
+  it('emits terminal post-call state when summary generation is unavailable', async () => {
+    const ws = await connectAndDrainConnected(address);
+    const messages: unknown[] = [];
+    ws.on('message', data => {
+      messages.push(JSON.parse(data.toString()));
+    });
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
+    await new Promise(r => setTimeout(r, 100));
+    ws.send(JSON.stringify({ type: 'stop' }));
+    await new Promise(r => setTimeout(r, 100));
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'summary_unavailable' }));
+    expect(messages).toContainEqual({ type: 'state', overlayState: 'POSTCALL' });
+    ws.close();
+  });
+
+  it('closes malformed JSON control messages with policy violation', async () => {
+    const ws = await connectAndDrainConnected(address);
+    const closeCode = new Promise<number>(resolve => {
+      ws.once('close', code => resolve(code));
+    });
+    ws.send(JSON.stringify({ type: 'start' }));
+    await expect(closeCode).resolves.toBe(1008);
+    expect(built.db.select().from(callSessions).all()).toHaveLength(0);
   });
 
   it('handles binary audio chunk', async () => {
@@ -118,10 +197,14 @@ describe('WebSocket route', () => {
 
   it('is idempotent when stop and close race', async () => {
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'investor',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'investor',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 50));
     ws.send(JSON.stringify({ type: 'stop' }));
     ws.close(); // fire both in quick succession
@@ -139,10 +222,14 @@ describe('WebSocket route', () => {
       followUpDraft: 'Thanks for the call. I will send the pilot plan.',
     });
     const ws = await connectAndDrainConnected(address);
-    ws.send(JSON.stringify({
-      type: 'start', platform: 'meet', callType: 'enterprise',
-      prospect: { name: 'James', company: 'Acme' },
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'enterprise',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
     await new Promise(r => setTimeout(r, 100));
     ws.send(Buffer.from([0x01, 0x02, 0x03]));
     await new Promise(r => setTimeout(r, 50));
@@ -158,11 +245,95 @@ describe('WebSocket route', () => {
     ws.close();
   });
 
+  it('passes Gmail and Outlook voice samples into post-call summary generation', async () => {
+    await app.close();
+    gmailMock.refreshAccessToken.mockResolvedValue('gmail-access');
+    gmailMock.fetchRecentSentEmails.mockResolvedValue([
+      { subject: 'Gmail newer', body: 'Gmail tone.', sentAt: 200 },
+    ]);
+    outlookMock.refreshOutlookAccessToken.mockResolvedValue('outlook-access');
+    outlookMock.fetchRecentOutlookSentEmails.mockResolvedValue([
+      { subject: 'Outlook newest', body: 'Outlook tone.', sentAt: 300 },
+      { subject: 'Outlook older', body: 'Older tone.', sentAt: 100 },
+    ]);
+    summaryMock.generateSummary.mockResolvedValue({
+      winSignals: [],
+      objections: [],
+      decisions: [],
+      followUpDraft: 'Thanks for the call.',
+    });
+    built = await buildApp({
+      gmail: {
+        clientId: 'gmail-client',
+        clientSecret: 'gmail-secret',
+        refreshToken: 'gmail-refresh',
+      },
+      outlook: {
+        clientId: 'outlook-client',
+        clientSecret: 'outlook-secret',
+        refreshToken: 'outlook-refresh',
+        tenantId: 'common',
+      },
+    });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+
+    const ws = await connectAndDrainConnected(address);
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        platform: 'meet',
+        callType: 'enterprise',
+        prospect: { name: 'James', company: 'Acme' },
+      }),
+    );
+    await new Promise(r => setTimeout(r, 100));
+    ws.send(JSON.stringify({ type: 'stop' }));
+    await new Promise(r => setTimeout(r, 150));
+
+    expect(summaryMock.generateSummary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voiceSamples: [
+          { subject: 'Outlook newest', body: 'Outlook tone.' },
+          { subject: 'Gmail newer', body: 'Gmail tone.' },
+          { subject: 'Outlook older', body: 'Older tone.' },
+        ],
+      }),
+    );
+    ws.close();
+  });
+
   it('rejects unauthenticated websocket upgrades when security is enabled', async () => {
     await app.close();
     built = await buildApp({ auth: true });
     app = built.app;
     const res = await app.inject({ method: 'GET', url: '/ws' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts websocket auth through subprotocol token', async () => {
+    await app.close();
+    built = await buildApp({ auth: true });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+    const ws = await connectAndDrainConnected(address, ['signal-token.dGVzdC10b2tlbg']);
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    ws.close();
+  });
+
+  it('closes oversized websocket messages', async () => {
+    await app.close();
+    built = await buildApp({ maxMessageBytes: 8 });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+    const ws = await connectAndDrainConnected(address);
+    const closeCode = new Promise<number>(resolve => {
+      ws.once('close', code => resolve(code));
+    });
+    ws.send(Buffer.alloc(16));
+    await expect(closeCode).resolves.toBe(1009);
   });
 });

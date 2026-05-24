@@ -2,40 +2,120 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { PreCallSetup } from '../../components/popup/PreCallSetup';
 import { PostCallView } from '../../components/popup/PostCallView';
+import { ConnectionSettings } from '../../components/popup/ConnectionSettings';
 import type { PostCallSummary, Prospect } from '@signal/types';
+import {
+  DEFAULT_SIGNAL_SERVER_URL,
+  readSignalConnectionConfig,
+  type SignalConnectionConfig,
+} from '../../lib/connectionConfig';
 import '../../components/popup/popup.css';
 
 type View = 'pre' | 'post';
 
+declare const __WS_URL__: string;
+declare const __SIGNAL_AUTH_TOKEN__: string;
+
+const DEFAULT_CONNECTION: SignalConnectionConfig = {
+  serverUrl: DEFAULT_SIGNAL_SERVER_URL,
+  authToken: typeof __SIGNAL_AUTH_TOKEN__ !== 'undefined' ? __SIGNAL_AUTH_TOKEN__ : '',
+};
+
+if (typeof __WS_URL__ !== 'undefined') {
+  DEFAULT_CONNECTION.serverUrl = __WS_URL__;
+}
+
+function isProspect(value: unknown): value is Partial<Prospect> {
+  return typeof value === 'object' && value !== null;
+}
+
 function Popup() {
   const [view, setView] = useState<View>('pre');
-  const [prospect, setProspect] = useState<Prospect>({ name: '', company: '', email: '', linkedinUrl: '' });
+  const [prospect, setProspect] = useState<Prospect>({
+    name: '',
+    company: '',
+    email: '',
+    linkedinUrl: '',
+  });
   const [summary, setSummary] = useState<PostCallSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [connection, setConnection] = useState<SignalConnectionConfig>(DEFAULT_CONNECTION);
+  const [showSettings, setShowSettings] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Load last detected prospect + any stored summary
   useEffect(() => {
-    chrome.storage.session.get(['detectedProspect', 'latestSummary', 'popupView']).then((d: Record<string, any>) => {
-      if (d.detectedProspect) setProspect(p => ({ ...p, ...d.detectedProspect }));
-      if (d.latestSummary) setSummary(d.latestSummary);
-      if (d.popupView === 'post') setView('post');
-    });
+    chrome.storage.session
+      .get(['detectedProspect', 'latestSummary', 'summaryError', 'popupView'])
+      .then((d: Record<string, unknown>) => {
+        const detectedProspect = d.detectedProspect;
+        if (isProspect(detectedProspect)) setProspect(p => ({ ...p, ...detectedProspect }));
+        if (d.latestSummary) setSummary(d.latestSummary as PostCallSummary);
+        if (typeof d.summaryError === 'string') setSummaryError(d.summaryError);
+        if (d.popupView === 'post') setView('post');
+      });
+    readSignalConnectionConfig(DEFAULT_CONNECTION)
+      .then(setConnection)
+      .catch(() => {});
   }, []);
 
   const handleStart = async (callType: 'investor' | 'enterprise' | 'bd' | 'customer') => {
+    setStartError(null);
     await chrome.storage.session.set({ pendingProspect: prospect, pendingCallType: callType });
-    chrome.runtime.sendMessage({ type: 'POPUP_START_REQUEST' });
-    window.close();
+    const res = (await chrome.runtime.sendMessage({ type: 'POPUP_START_REQUEST' })) as
+      | { ok?: boolean; error?: string }
+      | undefined;
+    if (res?.ok) {
+      window.close();
+      return;
+    }
+    setStartError(res?.error ?? 'Unable to start capture');
   };
+
+  const hasToken = connection.authToken.trim().length > 0;
 
   return (
     <div className="popup">
-      <header>SIGNAL</header>
+      <header>
+        <div className="popup-brand">
+          <span className="brand-mark" />
+          <div>
+            <strong>Signal</strong>
+            <small>{view === 'pre' ? 'Pre-call' : 'Post-call'}</small>
+          </div>
+        </div>
+        <button
+          className={hasToken ? 'header-action' : 'header-action warning'}
+          onClick={() => setShowSettings(v => !v)}
+        >
+          {hasToken ? 'Ready' : 'Connect'}
+        </button>
+      </header>
+      {(showSettings || !hasToken) && (
+        <ConnectionSettings config={connection} onChange={setConnection} />
+      )}
+      {startError && <div className="error-banner">{startError}</div>}
       {view === 'pre' ? (
-        <PreCallSetup prospect={prospect} onChange={setProspect} onStart={handleStart} />
+        <PreCallSetup
+          prospect={prospect}
+          connectionReady={hasToken}
+          onChange={setProspect}
+          onStart={handleStart}
+        />
       ) : summary ? (
-        <PostCallView summary={summary} onNewCall={() => { setSummary(null); setView('pre'); }} />
+        <PostCallView
+          summary={summary}
+          onNewCall={() => {
+            setSummary(null);
+            setSummaryError(null);
+            setView('pre');
+            chrome.storage.session
+              .set({ latestSummary: null, summaryError: null, popupView: 'pre' })
+              .catch(() => {});
+          }}
+        />
       ) : (
-        <div className="empty">No summary available.</div>
+        <div className="empty">{summaryError ?? 'No summary available.'}</div>
       )}
     </div>
   );

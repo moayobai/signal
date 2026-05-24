@@ -20,6 +20,15 @@ function formatWhen(ts: number | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const SEARCH_PROMPTS = [
+  'Which calls had security objections?',
+  'Where did an investor ask for proof?',
+  'What deals mention pricing risk?',
+  'Show moments of strong buying intent',
+  'Where did we fail to secure next steps?',
+  'What should I prepare before the next call?',
+];
+
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const initial = params.get('q') ?? '';
@@ -59,19 +68,31 @@ export default function Search() {
       <header className="page-head">
         <div className="titles">
           <span className="eyebrow">Explore</span>
-          <h1>Search across <em>transcripts</em></h1>
+          <h1>
+            Search across <em>transcripts</em>
+          </h1>
           <p className="subtitle">
-            Ask in plain English — "where did we push back on pricing?", "objections about security",
-            "moments of genuine enthusiasm". Voyage embeddings match meaning, not just keywords.
+            Ask in plain English — "where did we push back on pricing?", "objections about
+            security", "moments of genuine enthusiasm". Voyage embeddings match meaning, not just
+            keywords.
           </p>
         </div>
       </header>
 
-      <div className="glass search-bar" style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '14px 18px', borderRadius: 'var(--r-lg)', marginBottom: 24,
-      }}>
-        <span style={{ color: 'var(--ink-3)' }}><SearchIcon size={18} /></span>
+      <div
+        className="glass search-bar"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 18px',
+          borderRadius: 'var(--r-lg)',
+          marginBottom: 24,
+        }}
+      >
+        <span style={{ color: 'var(--ink-3)' }}>
+          <SearchIcon size={18} />
+        </span>
         <input
           autoFocus
           value={input}
@@ -79,32 +100,59 @@ export default function Search() {
           placeholder="Find every call where…"
           maxLength={200}
           style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--ink-1)', fontFamily: 'var(--font-ui)', fontSize: 16,
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--ink-1)',
+            fontFamily: 'var(--font-ui)',
+            fontSize: 16,
           }}
         />
         {input && (
           <button
             onClick={() => setInput('')}
             style={{
-              background: 'transparent', border: 'none', color: 'var(--ink-3)',
-              cursor: 'pointer', fontSize: 13,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--ink-3)',
+              cursor: 'pointer',
+              fontSize: 13,
             }}
-          >Clear</button>
+          >
+            Clear
+          </button>
         )}
       </div>
 
       {q.length === 0 && (
-        <div className="empty glass">
-          <div className="glyph"><SearchIcon /></div>
-          <p>Type a question above. Results appear as you type.</p>
+        <div className="search-starter glass">
+          <div>
+            <div className="glyph">
+              <SearchIcon />
+            </div>
+            <h2>Ask Signal like a deal room.</h2>
+            <p>
+              Start from a revenue question, not a keyword. The best searches uncover risk, proof,
+              urgency, and promises across every call.
+            </p>
+          </div>
+          <div className="prompt-grid">
+            {SEARCH_PROMPTS.map(prompt => (
+              <button type="button" key={prompt} onClick={() => setInput(prompt)}>
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {q.length > 0 && query.isLoading && (
         <ul className="call-list">
           {[0, 1, 2].map(i => (
-            <li key={i}><div className="glass" style={{ height: 92, borderRadius: 'var(--r-md)' }} /></li>
+            <li key={i}>
+              <div className="glass" style={{ height: 92, borderRadius: 'var(--r-md)' }} />
+            </li>
           ))}
         </ul>
       )}
@@ -117,7 +165,9 @@ export default function Search() {
 
       {q.length > 0 && !query.isLoading && !errorMsg && results.length === 0 && (
         <div className="empty glass">
-          <div className="glyph"><SearchIcon /></div>
+          <div className="glyph">
+            <SearchIcon />
+          </div>
           <p>No matches — try different words.</p>
         </div>
       )}
@@ -126,34 +176,60 @@ export default function Search() {
         <ul className="call-list">
           {results.map(r => (
             <li key={`${r.sessionId}-${r.chunkIndex}`}>
-              <Link to={`/calls/${r.sessionId}`} className="call-row" style={{
-                alignItems: 'flex-start', gap: 16, padding: '16px 18px',
-              }}>
+              <Link
+                to={`/calls/${r.sessionId}`}
+                className="call-row"
+                style={{
+                  alignItems: 'flex-start',
+                  gap: 16,
+                  padding: '16px 18px',
+                }}
+              >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="who" style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                     <span className="name">{r.contactName ?? 'Unknown prospect'}</span>
                     {r.contactCompany && (
-                      <span className="sub" style={{ color: 'var(--ink-3)' }}>· {r.contactCompany}</span>
+                      <span className="sub" style={{ color: 'var(--ink-3)' }}>
+                        · {r.contactCompany}
+                      </span>
                     )}
-                    <span className="when" style={{ marginLeft: 'auto', color: 'var(--ink-3)', fontSize: 12 }}>
+                    <span
+                      className="when"
+                      style={{ marginLeft: 'auto', color: 'var(--ink-3)', fontSize: 12 }}
+                    >
                       {formatWhen(r.calledAt)}
                     </span>
                   </div>
-                  <p style={{
-                    margin: '8px 0 10px', color: 'var(--ink-2)', lineHeight: 1.5,
-                    fontSize: 14, fontFamily: 'var(--font-ui)',
-                  }}>
-                    <span style={{
-                      color: r.speaker === 'user' ? 'var(--pt-ask)' : 'var(--pt-body)',
-                      fontWeight: 600, marginRight: 6,
-                    }}>
-                      {r.speaker === 'user' ? 'You' : r.speaker === 'prospect' ? 'Prospect' : r.speaker}:
+                  <p
+                    style={{
+                      margin: '8px 0 10px',
+                      color: 'var(--ink-2)',
+                      lineHeight: 1.5,
+                      fontSize: 14,
+                      fontFamily: 'var(--font-ui)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: r.speaker === 'user' ? 'var(--pt-ask)' : 'var(--pt-body)',
+                        fontWeight: 600,
+                        marginRight: 6,
+                      }}
+                    >
+                      {r.speaker === 'user'
+                        ? 'You'
+                        : r.speaker === 'prospect'
+                          ? 'Prospect'
+                          : r.speaker}
+                      :
                     </span>
                     {r.text.length > 320 ? r.text.slice(0, 320).trim() + '…' : r.text}
                   </p>
                   <SimilarityBar value={r.similarity} />
                 </div>
-                <span className="arrow" style={{ alignSelf: 'center' }}><ArrowRightIcon /></span>
+                <span className="arrow" style={{ alignSelf: 'center' }}>
+                  <ArrowRightIcon />
+                </span>
               </Link>
             </li>
           ))}
@@ -167,14 +243,22 @@ function SimilarityBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{
-        flex: 1, height: 3, background: 'rgba(255,255,255,0.06)',
-        borderRadius: 2, overflow: 'hidden',
-      }}>
-        <div style={{
-          width: `${pct}%`, height: '100%',
-          background: 'var(--grad-signal)',
-        }} />
+      <div
+        style={{
+          flex: 1,
+          height: 3,
+          background: 'rgba(255,255,255,0.06)',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: '100%',
+            background: 'var(--grad-signal)',
+          }}
+        />
       </div>
       <span style={{ color: 'var(--ink-3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
         {pct}%

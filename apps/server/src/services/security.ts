@@ -1,4 +1,5 @@
 import rateLimit from '@fastify/rate-limit';
+import helmet from '@fastify/helmet';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 
@@ -7,6 +8,7 @@ export interface SecurityOptions {
   authDisabled?: boolean;
   rateLimitMax?: number;
   rateLimitWindow?: string | number;
+  secureCookies?: boolean;
 }
 
 const AUTH_COOKIE = 'signal_auth';
@@ -28,13 +30,39 @@ function tokenFromRequest(req: FastifyRequest): string | null {
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) return auth.slice('Bearer '.length).trim();
 
+  const wsProtocolToken = tokenFromWebSocketProtocol(req.headers['sec-websocket-protocol']);
+  if (wsProtocolToken) return wsProtocolToken;
+
   const headerToken = req.headers['x-signal-token'];
   if (typeof headerToken === 'string') return headerToken.trim();
 
-  const queryToken = (req.query as { token?: unknown } | undefined)?.token;
-  if (typeof queryToken === 'string') return queryToken.trim();
-
   return parseCookie(req.headers.cookie)[AUTH_COOKIE] ?? null;
+}
+
+function tokenFromQuery(req: FastifyRequest): string | null {
+  const queryToken = (req.query as { token?: unknown } | undefined)?.token;
+  return typeof queryToken === 'string' ? queryToken.trim() : null;
+}
+
+function base64UrlDecode(value: string): string | null {
+  const normalised = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalised.padEnd(normalised.length + ((4 - (normalised.length % 4)) % 4), '=');
+  try {
+    return Buffer.from(padded, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function tokenFromWebSocketProtocol(header: string | string[] | undefined): string | null {
+  const raw = Array.isArray(header) ? header.join(',') : header;
+  if (!raw) return null;
+  for (const part of raw.split(',')) {
+    const protocol = part.trim();
+    if (!protocol.startsWith('signal-token.')) continue;
+    return base64UrlDecode(protocol.slice('signal-token.'.length));
+  }
+  return null;
 }
 
 function safeTokenEqual(a: string, b: string): boolean {
@@ -47,10 +75,50 @@ function isPublicPath(url: string): boolean {
   return url === '/health' || url.startsWith('/health?');
 }
 
+function cleanTokenFromUrl(url: string): string {
+  const parsed = new URL(url, 'http://signal.local');
+  parsed.searchParams.delete('token');
+  const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  return path || '/';
+}
+
+function authCookie(authToken: string, secure: boolean): string {
+  const attrs = [
+    `${AUTH_COOKIE}=${encodeURIComponent(authToken)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/',
+    'Max-Age=2592000',
+  ];
+  if (secure) attrs.push('Secure');
+  return attrs.join('; ');
+}
+
 export async function registerSecurity(app: FastifyInstance, opts: SecurityOptions): Promise<void> {
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        upgradeInsecureRequests: opts.secureCookies ? [] : null,
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  });
+
   await app.register(rateLimit, {
     max: opts.rateLimitMax ?? 120,
     timeWindow: opts.rateLimitWindow ?? '1 minute',
+    allowList: req => isPublicPath(req.url),
   });
 
   if (opts.authDisabled) {
@@ -66,17 +134,20 @@ export async function registerSecurity(app: FastifyInstance, opts: SecurityOptio
   app.addHook('onRequest', async (req, reply) => {
     if (isPublicPath(req.url)) return;
 
+    const queryToken = tokenFromQuery(req);
+    if (
+      req.method === 'GET' &&
+      req.url.startsWith('/dashboard/') &&
+      queryToken &&
+      safeTokenEqual(queryToken, authToken)
+    ) {
+      reply.header('set-cookie', authCookie(authToken, opts.secureCookies ?? false));
+      return reply.redirect(cleanTokenFromUrl(req.url), 302);
+    }
+
     const token = tokenFromRequest(req);
     if (!token || !safeTokenEqual(token, authToken)) {
       return reply.code(401).send({ error: 'unauthorized' });
-    }
-
-    const queryToken = (req.query as { token?: unknown } | undefined)?.token;
-    if (typeof queryToken === 'string' && safeTokenEqual(queryToken, authToken)) {
-      reply.header(
-        'set-cookie',
-        `${AUTH_COOKIE}=${encodeURIComponent(authToken)}; HttpOnly; SameSite=Lax; Path=/`,
-      );
     }
   });
 }

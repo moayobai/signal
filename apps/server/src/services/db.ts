@@ -1,6 +1,10 @@
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { sqliteTable, text, integer, real, blob } from 'drizzle-orm/sqlite-core';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const contacts = sqliteTable('contacts', {
   id: text('id').primaryKey(),
@@ -60,12 +64,12 @@ export const transcriptEmbeddings = sqliteTable('transcript_embeddings', {
 });
 
 export const upcomingMeetings = sqliteTable('upcoming_meetings', {
-  id: text('id').primaryKey(),                          // {provider}:{eventId}
+  id: text('id').primaryKey(), // {provider}:{eventId}
   provider: text('provider').notNull(),
   title: text('title').notNull(),
   startTime: integer('start_time').notNull(),
   endTime: integer('end_time').notNull(),
-  attendees: text('attendees').notNull(),               // JSON-encoded CalendarAttendee[]
+  attendees: text('attendees').notNull(), // JSON-encoded CalendarAttendee[]
   meetingLink: text('meeting_link'),
   description: text('description'),
   detectedAt: integer('detected_at').notNull(),
@@ -84,10 +88,17 @@ export const callSummaries = sqliteTable('call_summaries', {
 
 export type DB = BetterSQLite3Database<Record<string, never>>;
 
+export interface InitDbOptions {
+  backupBeforeMigrations?: boolean;
+  backupDir?: string;
+  now?: () => number;
+}
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
   id TEXT PRIMARY KEY,
-  applied_at INTEGER NOT NULL
+  applied_at INTEGER NOT NULL,
+  checksum TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, linkedin_url TEXT,
@@ -171,12 +182,88 @@ function isBenignMigrationError(err: unknown): boolean {
   return /duplicate column name|already exists/i.test(msg);
 }
 
-function applyMigrations(sqlite: Database.Database): void {
-  const hasMigration = sqlite.prepare('SELECT 1 FROM schema_migrations WHERE id = ?').pluck();
-  const recordMigration = sqlite.prepare('INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES (?, ?)');
+function migrationChecksum(statements: string[]): string {
+  return createHash('sha256').update(statements.join('\n')).digest('hex');
+}
+
+function databasePath(url: string): string | null {
+  if (!url || url === ':memory:') return null;
+  if (url.startsWith('file:')) return fileURLToPath(url);
+  return resolve(url);
+}
+
+function hasExistingFileDatabase(url: string): boolean {
+  const dbPath = databasePath(url);
+  if (!dbPath) return false;
+  if (!existsSync(dbPath)) return false;
+  const stat = statSync(dbPath);
+  return stat.isFile() && stat.size > 0;
+}
+
+function backupPathFor(url: string, backupDir: string | undefined, now: number): string | null {
+  if (!hasExistingFileDatabase(url)) return null;
+
+  const dbPath = databasePath(url);
+  if (!dbPath) return null;
+  const targetDir = backupDir ? resolve(backupDir) : join(dirname(dbPath), 'backups');
+  const stamp = new Date(now).toISOString().replace(/[:.]/g, '-');
+  return join(targetDir, `${basename(dbPath)}.${stamp}.bak`);
+}
+
+function backupDatabaseBeforeMigration(
+  sqlite: Database.Database,
+  url: string,
+  opts: InitDbOptions,
+): string | null {
+  const target = backupPathFor(url, opts.backupDir, opts.now?.() ?? Date.now());
+  if (!target) return null;
+  const dbPath = databasePath(url);
+  if (!dbPath) return null;
+  mkdirSync(dirname(target), { recursive: true });
+  sqlite.pragma('wal_checkpoint(TRUNCATE)');
+  copyFileSync(dbPath, target);
+  return target;
+}
+
+function applyMigrations(
+  sqlite: Database.Database,
+  url: string,
+  opts: InitDbOptions,
+  hadExistingDb: boolean,
+): void {
+  let backedUp = false;
+  if (
+    hadExistingDb &&
+    opts.backupBeforeMigrations !== false &&
+    !migrationMetadataHasChecksum(sqlite)
+  ) {
+    backupDatabaseBeforeMigration(sqlite, url, opts);
+    backedUp = true;
+  }
+  ensureMigrationMetadata(sqlite);
+  const hasMigration = sqlite.prepare('SELECT checksum FROM schema_migrations WHERE id = ?');
+  const updateChecksum = sqlite.prepare('UPDATE schema_migrations SET checksum = ? WHERE id = ?');
+  const recordMigration = sqlite.prepare(
+    'INSERT OR IGNORE INTO schema_migrations (id, applied_at, checksum) VALUES (?, ?, ?)',
+  );
 
   for (const migration of MIGRATIONS) {
-    if (hasMigration.get(migration.id)) continue;
+    const checksum = migrationChecksum(migration.statements);
+    const existing = hasMigration.get(migration.id) as { checksum: string } | undefined;
+    if (existing) {
+      if (!existing.checksum) {
+        updateChecksum.run(checksum, migration.id);
+        continue;
+      }
+      if (existing.checksum !== checksum) {
+        throw new Error(`Migration checksum mismatch for ${migration.id}`);
+      }
+      continue;
+    }
+    if (hadExistingDb && opts.backupBeforeMigrations !== false && !backedUp) {
+      backupDatabaseBeforeMigration(sqlite, url, opts);
+      backedUp = true;
+    }
     for (const stmt of migration.statements) {
       try {
         sqlite.exec(stmt);
@@ -184,17 +271,30 @@ function applyMigrations(sqlite: Database.Database): void {
         if (!isBenignMigrationError(err)) throw err;
       }
     }
-    recordMigration.run(migration.id, Date.now());
+    recordMigration.run(migration.id, Date.now(), checksum);
   }
 }
 
-export function initDb(url: string): DB {
-  const sqlite = new Database(url);
+function ensureMigrationMetadata(sqlite: Database.Database): void {
+  if (migrationMetadataHasChecksum(sqlite)) return;
+  sqlite.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT NOT NULL DEFAULT ''");
+}
+
+function migrationMetadataHasChecksum(sqlite: Database.Database): boolean {
+  const columns = sqlite.prepare('PRAGMA table_info(schema_migrations)').all() as Array<{
+    name: string;
+  }>;
+  return columns.some(column => column.name === 'checksum');
+}
+
+export function initDb(url: string, opts: InitDbOptions = {}): DB {
+  const hadExistingDb = hasExistingFileDatabase(url);
+  const sqlite = new Database(databasePath(url) ?? url);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
   sqlite.pragma('synchronous = NORMAL');
   sqlite.exec(DDL);
-  applyMigrations(sqlite);
+  applyMigrations(sqlite, url, opts, hadExistingDb);
   return drizzle(sqlite);
 }

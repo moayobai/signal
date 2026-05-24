@@ -8,6 +8,7 @@ labels: bug
 A clear description of what's wrong.
 
 **Steps to reproduce**
+
 1. ...
 2. ...
 
@@ -18,8 +19,9 @@ What you expected to happen.
 What actually happened.
 
 **Environment**
+
 - OS:
 - Chrome version:
 - Node version:
-- AI provider (claude / openrouter):
+- AI provider (claude / openrouter / together):
 - Server logs (redact API keys):

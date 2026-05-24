@@ -12,9 +12,9 @@ import { sql } from 'drizzle-orm';
 import type { CalendarProvider } from './calendar.js';
 import { upcomingMeetings, type DB } from './db.js';
 
-const DEFAULT_INTERVAL_MS = 120_000;   // 2 minutes
-const WINDOW_MS = 15 * 60 * 1000;      // 15 minutes
-const STALE_MS = 60 * 60 * 1000;       // prune rows older than 1h past start
+const DEFAULT_INTERVAL_MS = 120_000; // 2 minutes
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const STALE_MS = 60 * 60 * 1000; // prune rows older than 1h past start
 
 export interface CalendarPollerOpts {
   provider: CalendarProvider;
@@ -31,7 +31,7 @@ export interface CalendarPollerHandle {
 export function startCalendarPoller(opts: CalendarPollerOpts): CalendarPollerHandle {
   const interval = opts.intervalMs ?? DEFAULT_INTERVAL_MS;
   const log = opts.logger ?? {
-    info: (m: string) => console.log(m),
+    info: (m: string) => console.info(m),
     error: (m: string, err?: unknown) => console.error(m, err),
   };
 
@@ -57,7 +57,9 @@ export function startCalendarPoller(opts: CalendarPollerOpts): CalendarPollerHan
           description: ev.description ?? null,
           detectedAt: now,
         };
-        opts.db.insert(upcomingMeetings).values(row)
+        opts.db
+          .insert(upcomingMeetings)
+          .values(row)
           .onConflictDoUpdate({
             target: upcomingMeetings.id,
             set: {
@@ -73,7 +75,8 @@ export function startCalendarPoller(opts: CalendarPollerOpts): CalendarPollerHan
           .run();
       }
       // Prune rows whose meeting started more than STALE_MS ago.
-      opts.db.delete(upcomingMeetings)
+      opts.db
+        .delete(upcomingMeetings)
         .where(sql`${upcomingMeetings.startTime} < ${now - STALE_MS}`)
         .run();
       if (events.length > 0) {
@@ -88,7 +91,9 @@ export function startCalendarPoller(opts: CalendarPollerOpts): CalendarPollerHan
 
   // Fire once immediately so the table is populated on startup.
   void tick();
-  const handle = setInterval(() => { void tick(); }, interval);
+  const handle = setInterval(() => {
+    void tick();
+  }, interval);
 
   return {
     stop: () => {

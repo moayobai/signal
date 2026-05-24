@@ -1,35 +1,35 @@
 :root {
   /* Glass surfaces */
-  --glass-bg:       rgba(255, 255, 255, 0.72);
-  --glass-border:   rgba(255, 255, 255, 0.55);
-  --glass-shadow:   0 20px 60px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
 
   /* Brand */
-  --accent:         #0071E3;
-  --accent-subtle:  rgba(0, 113, 227, 0.10);
+  --accent: #0071e3;
+  --accent-subtle: rgba(0, 113, 227, 0.1);
 
   /* Semantic */
-  --success:        #30d158;
-  --warning:        #ff9f0a;
-  --danger:         #ff453a;
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
 
   /* Text */
-  --text-primary:   #1d1d1f;
+  --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
-  --text-tertiary:  #aeaeb2;
+  --text-tertiary: #aeaeb2;
 
   /* Radii */
-  --radius-pill:    100px;
-  --radius-lg:      18px;
-  --radius-md:      12px;
-  --radius-sm:      8px;
+  --radius-pill: 100px;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
 
   /* Typography */
-  --font-body:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
-  --font-mono:      'SF Mono', 'Fira Code', monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
 
   /* Motion */
-  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out:       ease-out;
-  --ease-in:        ease-in;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: ease-out;
+  --ease-in: ease-in;
 }

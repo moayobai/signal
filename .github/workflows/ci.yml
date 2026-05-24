@@ -42,5 +42,11 @@ jobs:
           DATABASE_URL: ':memory:'
           SIGNAL_AUTH_DISABLED: 'true'
 
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser e2e
+        run: pnpm e2e:browser
+
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level moderate

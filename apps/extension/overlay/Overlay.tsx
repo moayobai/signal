@@ -7,7 +7,9 @@ import { LiveSidebar } from './components/LiveSidebar';
 import { playNudgeTone } from './sound';
 
 function formatTime(s: number): string {
-  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const m = Math.floor(s / 60)
+    .toString()
+    .padStart(2, '0');
   const sec = (s % 60).toString().padStart(2, '0');
   return `${m}:${sec}`;
 }
@@ -19,9 +21,18 @@ interface OverlayProps {
 export function Overlay({ useMockFixture = false }: OverlayProps) {
   const {
     overlayState,
-    frame, prevSentiment, cueHistory, frameVersion,
-    transcript, elapsedSeconds, postCallSummary,
-    setOverlayState, setFrame, appendTranscriptLine, setPostCallSummary, setElapsedSeconds,
+    frame,
+    prevSentiment,
+    cueHistory,
+    frameVersion,
+    transcript,
+    elapsedSeconds,
+    postCallSummary,
+    setOverlayState,
+    setFrame,
+    appendTranscriptLine,
+    setPostCallSummary,
+    setElapsedSeconds,
   } = useSignalStore();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -30,6 +41,7 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
   const [snoozeUntil, setSnoozeUntil] = useState(0);
   /** Type of the last frame for which a nudge was rendered — prevents re-animation churn. */
   const [lastAnimatedType, setLastAnimatedType] = useState<string | null>(null);
+  const startedAtRef = useRef<number | null>(null);
 
   // Global Escape key: dismiss nudge + snooze for 5s
   useEffect(() => {
@@ -53,7 +65,31 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
       onElapsed: setElapsedSeconds,
     });
     return stop;
-  }, [useMockFixture]);
+  }, [
+    appendTranscriptLine,
+    setElapsedSeconds,
+    setFrame,
+    setOverlayState,
+    setPostCallSummary,
+    useMockFixture,
+  ]);
+
+  useEffect(() => {
+    const active = overlayState === 'LIVE' || overlayState === 'DANGER';
+    if (!active) {
+      startedAtRef.current = null;
+      if (overlayState === 'IDLE') setElapsedSeconds(0);
+      return;
+    }
+    if (startedAtRef.current === null) startedAtRef.current = Date.now();
+    const tick = () => {
+      const startedAt = startedAtRef.current ?? Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [overlayState, setElapsedSeconds]);
 
   // Re-show the nudge card whenever a new frame version arrives —
   // but skip if we're still within the snooze window.
@@ -68,14 +104,15 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
     if (frame && frame.prompt.type !== 'IDLE' && frame.prompt.type !== lastAnimatedType) {
       setLastAnimatedType(frame.prompt.type);
     }
-  }, [frame?.prompt.type, lastAnimatedType]);
+  }, [frame, lastAnimatedType]);
 
   const danger = overlayState === 'DANGER';
-  const showNudge = (overlayState === 'LIVE' || overlayState === 'DANGER')
-    && frame
-    && frame.prompt.type !== 'IDLE'
-    && !nudgeDismissed
-    && Date.now() >= snoozeUntil;
+  const showNudge =
+    (overlayState === 'LIVE' || overlayState === 'DANGER') &&
+    frame &&
+    frame.prompt.type !== 'IDLE' &&
+    !nudgeDismissed &&
+    Date.now() >= snoozeUntil;
 
   // Play the signature tone when a nudge first appears — but never during
   // DANGER, since that state already pulses + reddens the card. Double-signal
@@ -143,27 +180,47 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
         <div className="sig-postcall">
           <div className="head">
             <div>
-              <div className="eyebrow">Call complete</div>
-              <h2>Here's what happened.</h2>
+              <div className="eyebrow">Debrief saved</div>
+              <h2>Next move is ready.</h2>
             </div>
           </div>
 
           <h3 className="win">Win signals</h3>
           <ul className="win">
-            {postCallSummary.winSignals.map((s, i) => <li key={i}>{s}</li>)}
+            {postCallSummary.winSignals.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
           </ul>
 
           <h3 className="obj">Objections</h3>
           <ul className="obj">
-            {postCallSummary.objections.map((s, i) => <li key={i}>{s}</li>)}
+            {postCallSummary.objections.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
           </ul>
 
           <h3 className="dec">Decisions</h3>
           <ul className="dec">
-            {postCallSummary.decisions.map((s, i) => <li key={i}>{s}</li>)}
+            {postCallSummary.decisions.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
           </ul>
 
           <div className="followup">{postCallSummary.followUpDraft}</div>
+        </div>
+      )}
+
+      {overlayState === 'POSTCALL' && !postCallSummary && (
+        <div className="sig-postcall">
+          <div className="head">
+            <div>
+              <div className="eyebrow">Call saved</div>
+              <h2>Summary unavailable.</h2>
+            </div>
+          </div>
+          <div className="followup">
+            The call was saved, but SIGNAL could not generate a post-call summary.
+          </div>
         </div>
       )}
     </div>

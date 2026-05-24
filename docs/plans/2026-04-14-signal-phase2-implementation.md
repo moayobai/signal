@@ -13,6 +13,7 @@
 ### Task 1: Add `ClientMessage`, `ServerMessage`, `CallType` to `@signal/types`
 
 **Files:**
+
 - Modify: `packages/types/index.ts`
 
 **Step 1: Add the new types**
@@ -57,6 +58,7 @@ git commit -m "feat(types): add ClientMessage, ServerMessage, CallType for Phase
 ### Task 2: Server `package.json` + `tsconfig.json` + `vitest.config.ts`
 
 **Files:**
+
 - Modify: `apps/server/package.json`
 - Create: `apps/server/tsconfig.json`
 - Create: `apps/server/vitest.config.ts`
@@ -160,6 +162,7 @@ git commit -m "chore(server): configure package.json, tsconfig, vitest for Phase
 ### Task 3: `knowledge/company.md` template
 
 **Files:**
+
 - Create: `knowledge/company.md`
 
 **Step 1: Create the file**
@@ -174,35 +177,43 @@ Contents of `knowledge/company.md`:
 # Company Context
 
 ## About
-[Company name] is a [brief description — e.g., "B2B SaaS platform for..."]. 
+
+[Company name] is a [brief description — e.g., "B2B SaaS platform for..."].
 
 ## Ideal Customer Profile
+
 - Industry: [e.g., Financial services, Enterprise SaaS]
 - Company size: [e.g., 50–500 employees]
 - Title: [e.g., VP Sales, CRO, Head of Revenue]
 
 ## Value Propositions
+
 1. [Core value prop 1]
 2. [Core value prop 2]
 3. [Core value prop 3]
 
 ## Common Objections
+
 - "Too expensive": [Reframe]
 - "Already have a solution": [Reframe]
 - "Not the right time": [Reframe]
 
 ## Competitors
+
 - [Competitor 1]
 - [Competitor 2]
 - [Competitor 3]
 
 ## Pricing Keywords
+
 price, cost, expensive, budget, afford, pricing, ROI, investment
 
 ## Key Differentiators
+
 [What makes you different from competitors]
 
 ## Proof Points / Case Studies
+
 - [Customer 1]: [Result]
 - [Customer 2]: [Result]
 ```
@@ -220,6 +231,7 @@ git commit -m "feat(knowledge): add company.md template for Claude system prompt
 ### Task 4: `apps/server/src/prompts/live.ts` — system prompt builder
 
 **Files:**
+
 - Create: `apps/server/src/prompts/live.ts`
 
 **Step 1: Create the directory and file**
@@ -281,10 +293,10 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
 - timestamp: current unix milliseconds`;
 }
 
-export function buildUserPrompt(transcript: Array<{ speaker: string; text: string; timestamp: number }>): string {
-  const lines = transcript
-    .map(l => `[${l.speaker.toUpperCase()}] ${l.text}`)
-    .join('\n');
+export function buildUserPrompt(
+  transcript: Array<{ speaker: string; text: string; timestamp: number }>,
+): string {
+  const lines = transcript.map(l => `[${l.speaker.toUpperCase()}] ${l.text}`).join('\n');
   return `Transcript (last 90s):\n${lines}\n\nReturn the SignalFrame JSON now.`;
 }
 ```
@@ -310,6 +322,7 @@ git commit -m "feat(server): add live prompt builder with company context inject
 ### Task 5: `apps/server/src/services/session.ts` — TDD
 
 **Files:**
+
 - Create: `apps/server/src/services/session.ts`
 - Create: `apps/server/src/services/session.test.ts`
 
@@ -322,8 +335,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CallSession } from './session.js';
 
 describe('CallSession — rolling window', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('keeps lines within 90s window', () => {
     const session = new CallSession('meet', 'enterprise');
@@ -350,8 +367,12 @@ describe('CallSession — rolling window', () => {
 });
 
 describe('CallSession — danger detection', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('detects silence after 30s', () => {
     const session = new CallSession('meet', 'enterprise');
@@ -400,7 +421,16 @@ Expected: FAIL — `Cannot find module './session.js'`
 ```ts
 import type { TranscriptLine, CallType } from '@signal/types';
 
-const PRICING_KEYWORDS = ['price', 'cost', 'expensive', 'budget', 'afford', 'pricing', 'roi', 'investment'];
+const PRICING_KEYWORDS = [
+  'price',
+  'cost',
+  'expensive',
+  'budget',
+  'afford',
+  'pricing',
+  'roi',
+  'investment',
+];
 const SILENCE_THRESHOLD_MS = 30_000;
 const WINDOW_DURATION_MS = 90_000;
 
@@ -484,6 +514,7 @@ git commit -m "feat(server): CallSession with rolling 90s window and danger dete
 ### Task 6: `apps/server/src/services/claude.ts` — TDD
 
 **Files:**
+
 - Create: `apps/server/src/services/claude.ts`
 - Create: `apps/server/src/services/claude.test.ts`
 
@@ -705,6 +736,7 @@ git commit -m "feat(server): Claude Haiku caller with placeholder guard and JSON
 ### Task 7: `apps/server/src/services/deepgram.ts`
 
 **Files:**
+
 - Create: `apps/server/src/services/deepgram.ts`
 
 No unit test for this — Deepgram client wraps an external streaming WS connection. It will be covered by the integration test in Task 8.
@@ -755,7 +787,7 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
     smart_format: true,
   });
 
-  connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+  connection.on(LiveTranscriptionEvents.Transcript, data => {
     const alt = data.channel?.alternatives?.[0];
     if (!alt?.transcript?.trim()) return;
     if (data.is_final === false) return; // interim — skip
@@ -807,6 +839,7 @@ git commit -m "feat(server): Deepgram Nova-3 streaming client wrapper"
 ### Task 8: `apps/server/src/routes/ws.ts` — WebSocket handler + integration test
 
 **Files:**
+
 - Create: `apps/server/src/routes/ws.ts`
 - Create: `apps/server/src/routes/ws.test.ts`
 
@@ -876,8 +909,8 @@ describe('WebSocket route', () => {
 
   it('sends connected message on connect', async () => {
     const ws = new WebSocket(address);
-    const msg = await new Promise<string>((resolve) => {
-      ws.on('message', (data) => resolve(data.toString()));
+    const msg = await new Promise<string>(resolve => {
+      ws.on('message', data => resolve(data.toString()));
     });
     ws.close();
     const parsed = JSON.parse(msg);
@@ -887,10 +920,10 @@ describe('WebSocket route', () => {
 
   it('handles binary audio chunk without crashing', async () => {
     const ws = new WebSocket(address);
-    await new Promise<void>((resolve) => ws.on('open', resolve));
+    await new Promise<void>(resolve => ws.on('open', resolve));
 
     // Drain the 'connected' message
-    await new Promise<void>((resolve) => ws.on('message', () => resolve()));
+    await new Promise<void>(resolve => ws.on('message', () => resolve()));
 
     // Send fake audio chunk
     ws.send(Buffer.from([0x01, 0x02, 0x03]));
@@ -903,8 +936,8 @@ describe('WebSocket route', () => {
 
   it('handles stop message', async () => {
     const ws = new WebSocket(address);
-    await new Promise<void>((resolve) => ws.on('open', resolve));
-    await new Promise<void>((resolve) => ws.on('message', () => resolve()));
+    await new Promise<void>(resolve => ws.on('open', resolve));
+    await new Promise<void>(resolve => ws.on('message', () => resolve()));
 
     ws.send(JSON.stringify({ type: 'stop' }));
     await new Promise(r => setTimeout(r, 50));
@@ -940,7 +973,7 @@ interface WsRouteOptions {
 }
 
 export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): void {
-  app.get('/ws', { websocket: true }, (socket) => {
+  app.get('/ws', { websocket: true }, socket => {
     const session = new CallSession('meet', 'enterprise');
 
     function send(msg: ServerMessage): void {
@@ -955,7 +988,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     // Deepgram client
     const dg = createDeepgramClient({
       apiKey: opts.deepgramApiKey,
-      onTranscript: (line) => {
+      onTranscript: line => {
         session.addLine(line);
         send({ type: 'transcript', line });
 
@@ -965,7 +998,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           send({ type: 'state', overlayState: 'DANGER' });
         }
       },
-      onError: (err) => {
+      onError: err => {
         console.error('[SIGNAL] Deepgram error:', err);
         send({ type: 'error', message: 'STT error' });
       },
@@ -1024,7 +1057,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     }
 
     socket.on('close', cleanup);
-    socket.on('error', (err) => {
+    socket.on('error', err => {
       console.error('[SIGNAL] WS socket error:', err);
       cleanup();
     });
@@ -1053,6 +1086,7 @@ git commit -m "feat(server): WebSocket route with Deepgram + Claude integration 
 ### Task 9: `apps/server/src/index.ts` — Fastify bootstrap
 
 **Files:**
+
 - Modify: `apps/server/src/index.ts`
 
 **Step 1: Rewrite `apps/server/src/index.ts`**
@@ -1107,6 +1141,7 @@ cd /Users/mahomedayob/SIGNAL\ BUILD/apps/server && pnpm add -D pino-pretty
 ```
 
 If pnpm fails for some reason, skip pino-pretty and simplify logger config:
+
 ```ts
 const app = Fastify({ logger: true });
 ```
@@ -1118,6 +1153,7 @@ cd /Users/mahomedayob/SIGNAL\ BUILD/apps/server && npx tsx src/index.ts
 ```
 
 Expected output:
+
 ```
 [SIGNAL] Server listening on :8080
 [SIGNAL] ANTHROPIC_API_KEY is placeholder — Claude disabled
@@ -1139,6 +1175,7 @@ git commit -m "feat(server): Fastify bootstrap with health endpoint and WS route
 ### Task 10: `apps/server/.env.example` + `Dockerfile` + `fly.toml`
 
 **Files:**
+
 - Create: `apps/server/.env.example`
 - Create: `apps/server/Dockerfile`
 - Create: `apps/server/fly.toml`
@@ -1232,6 +1269,7 @@ git commit -m "feat(server): add .env.example, Dockerfile, fly.toml for Fly.io p
 ### Task 11: Update `turbo.json` server scripts + root `package.json`
 
 **Files:**
+
 - Modify: `turbo.json`
 - Modify: `package.json` (root)
 
@@ -1246,6 +1284,7 @@ The existing `turbo.json` already has `dev` as persistent, which covers the serv
 Confirm by checking: root `package.json` scripts should include a way to run server dev. If the root `dev` script currently only targets `--filter=extension`, add a `dev:server` alias:
 
 In root `package.json`, add to `scripts`:
+
 ```json
 "dev:server": "turbo run dev --filter=server"
 ```
@@ -1263,6 +1302,7 @@ git commit -m "chore: add dev:server turbo script"
 ### Task 12: Rewrite `apps/extension/entrypoints/background.ts`
 
 **Files:**
+
 - Modify: `apps/extension/entrypoints/background.ts`
 
 **Step 1: Rewrite the file**
@@ -1296,7 +1336,7 @@ export default defineBackground(() => {
 });
 
 function startCapture(sendResponse: (r: unknown) => void): void {
-  chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+  chrome.tabCapture.capture({ audio: true, video: false }, stream => {
     if (!stream) {
       console.error('[SIGNAL] tabCapture failed:', chrome.runtime.lastError?.message);
       sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
@@ -1322,7 +1362,7 @@ function connectWs(stream: MediaStream): void {
     startRecorder(stream, ws);
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = event => {
     try {
       const msg = JSON.parse(event.data as string) as ServerMessage;
       if (activeTabId !== null) {
@@ -1335,7 +1375,7 @@ function connectWs(stream: MediaStream): void {
     }
   };
 
-  ws.onerror = (err) => {
+  ws.onerror = err => {
     console.error('[SIGNAL] WS error:', err);
   };
 
@@ -1362,7 +1402,7 @@ function startRecorder(stream: MediaStream, ws: WebSocket): void {
   const rec = new MediaRecorder(stream, { mimeType });
   recorder = rec;
 
-  rec.ondataavailable = (e) => {
+  rec.ondataavailable = e => {
     if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
       e.data.arrayBuffer().then(buf => ws.send(buf));
     }
@@ -1410,6 +1450,7 @@ git commit -m "feat(extension): background.ts — tabCapture + MediaRecorder + W
 ### Task 13: Update `apps/extension/entrypoints/content.tsx`
 
 **Files:**
+
 - Modify: `apps/extension/entrypoints/content.tsx`
 
 **Step 1: Update `content.tsx`**
@@ -1424,11 +1465,7 @@ import { useSignalStore } from '../overlay/store';
 import type { ServerMessage } from '@signal/types';
 
 export default defineContentScript({
-  matches: [
-    '*://meet.google.com/*',
-    '*://*.zoom.us/wc/*',
-    '*://teams.microsoft.com/*',
-  ],
+  matches: ['*://meet.google.com/*', '*://*.zoom.us/wc/*', '*://teams.microsoft.com/*'],
   cssInjectionMode: 'ui',
 
   async main(ctx) {
@@ -1462,7 +1499,7 @@ export default defineContentScript({
     ui.mount();
 
     // Trigger audio capture
-    chrome.runtime.sendMessage({ type: 'START_CAPTURE' }, (response) => {
+    chrome.runtime.sendMessage({ type: 'START_CAPTURE' }, response => {
       if (chrome.runtime.lastError) {
         console.warn('[SIGNAL] START_CAPTURE error:', chrome.runtime.lastError.message);
       } else if (response?.error) {
@@ -1517,6 +1554,7 @@ git commit -m "feat(extension): content.tsx — START_CAPTURE trigger + server m
 ### Task 14: Update `apps/extension/wxt.config.ts` — tabCapture + `__WS_URL__`
 
 **Files:**
+
 - Modify: `apps/extension/wxt.config.ts`
 
 **Step 1: Update `wxt.config.ts`**
@@ -1532,11 +1570,7 @@ export default defineConfig({
     description: 'Real-time AI co-pilot for sales & investor calls',
     version: '0.1.0',
     permissions: ['tabs', 'storage', 'tabCapture'],
-    host_permissions: [
-      '*://meet.google.com/*',
-      '*://*.zoom.us/*',
-      '*://teams.microsoft.com/*',
-    ],
+    host_permissions: ['*://meet.google.com/*', '*://*.zoom.us/*', '*://teams.microsoft.com/*'],
   },
   vite: () => ({
     plugins: [tailwindcss()],

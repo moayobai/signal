@@ -15,13 +15,7 @@ const nodeGlobals = {
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
   {
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/.output/**',
-      '**/public/**',
-      '**/*.d.ts',
-    ],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/public/**', '**/*.d.ts'],
   },
   js.configs.recommended,
   {
@@ -52,9 +46,12 @@ export default [
       'no-undef': 'off',
       'no-unused-vars': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
 
       // React
       'react/jsx-key': 'error',

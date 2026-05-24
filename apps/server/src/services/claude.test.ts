@@ -3,7 +3,13 @@ import { parseSignalFrame, runLiveNudge } from './claude.js';
 import { NoOpProvider } from './ai.js';
 
 const VALID_FRAME = {
-  prompt: { type: 'ASK', text: 'Ask about timeline', confidence: 0.85, isNudge: false, timestamp: 1234567890 },
+  prompt: {
+    type: 'ASK',
+    text: 'Ask about timeline',
+    confidence: 0.85,
+    isNudge: false,
+    timestamp: 1234567890,
+  },
   bodyLang: { eyeContact: 'direct', posture: 'neutral', microExpressions: 'engaged' },
   sentiment: 72,
   dangerFlag: false,

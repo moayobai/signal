@@ -40,9 +40,7 @@ export function SentimentArc({ value, history = [] }: SentimentArcProps) {
             fill="none"
             stroke={color}
             strokeWidth="1.5"
-            points={history
-              .map((v, i) => `${i},${20 - (v / 100) * 20}`)
-              .join(' ')}
+            points={history.map((v, i) => `${i},${20 - (v / 100) * 20}`).join(' ')}
           />
         </svg>
       )}

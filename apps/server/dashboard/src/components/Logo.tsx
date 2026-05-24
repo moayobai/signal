@@ -31,7 +31,7 @@ export function Logo({ size = 28 }: LogoProps) {
     >
       <circle cx={c} cy={c} r={s * 0.44} />
       <circle cx={c + offset} cy={c - offset * 0.6} r={s * 0.28} />
-      <circle cx={c} cy={c} r={s * 0.10} />
+      <circle cx={c} cy={c} r={s * 0.1} />
     </svg>
   );
 }
@@ -47,13 +47,7 @@ export function LogoMark({ size = 28 }: LogoProps) {
   const gid = `signal-grad-${s}`;
 
   return (
-    <svg
-      width={s}
-      height={s}
-      viewBox={`0 0 ${s} ${s}`}
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#6366f1" />
@@ -62,8 +56,14 @@ export function LogoMark({ size = 28 }: LogoProps) {
         </linearGradient>
       </defs>
       <circle cx={c} cy={c} r={s * 0.44} stroke={`url(#${gid})`} strokeWidth={1.5} />
-      <circle cx={c + offset} cy={c - offset * 0.6} r={s * 0.28} stroke={`url(#${gid})`} strokeWidth={1.5} />
-      <circle cx={c} cy={c} r={s * 0.10} fill={`url(#${gid})`} />
+      <circle
+        cx={c + offset}
+        cy={c - offset * 0.6}
+        r={s * 0.28}
+        stroke={`url(#${gid})`}
+        strokeWidth={1.5}
+      />
+      <circle cx={c} cy={c} r={s * 0.1} fill={`url(#${gid})`} />
     </svg>
   );
 }

@@ -14,6 +14,7 @@ export default defineConfig({
       '*://teams.microsoft.com/*',
       'http://localhost:8080/*',
     ],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     action: {
       default_popup: 'popup.html',
       default_title: 'SIGNAL',
