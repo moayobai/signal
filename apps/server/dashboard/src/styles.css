@@ -578,6 +578,36 @@ body::before {
   margin-top: 8px;
 }
 
+.precall-brief {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.brief-row {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.brief-row span {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.brief-row strong {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink-1);
+}
+
 .meeting-actions {
   display: flex;
   gap: 8px;
@@ -1126,10 +1156,9 @@ body::before {
 }
 .t-row {
   display: grid;
-  grid-template-columns: minmax(160px, 2fr) minmax(130px, 2fr) minmax(110px, 1.5fr) minmax(
-      120px,
-      2fr
-    ) minmax(56px, 1fr) auto;
+  grid-template-columns:
+    minmax(160px, 2fr) minmax(130px, 2fr) minmax(110px, 1.5fr) minmax(120px, 2fr)
+    minmax(56px, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 14px 22px;
@@ -1289,6 +1318,92 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.relationship-card,
+.deal-context-card,
+.action-panel {
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.075), rgba(245, 165, 36, 0.045)), var(--glass-bg);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 var(--glass-inset);
+}
+
+.relationship-card .head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.memory-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.memory-item,
+.next-ask {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.memory-item span,
+.next-ask span,
+.deal-context-grid span,
+.action-tile span {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.memory-item strong,
+.next-ask strong,
+.deal-context-grid strong,
+.action-tile strong {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink-1);
+}
+
+.next-ask {
+  margin-top: 12px;
+  border-color: rgba(245, 165, 36, 0.2);
+  background: rgba(245, 165, 36, 0.06);
+}
+
+.deal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.deal-strip span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
 }
 
 .octamem {
@@ -1495,6 +1610,27 @@ body::before {
   flex-wrap: wrap;
 }
 
+.deal-context-card {
+  margin-bottom: 24px;
+}
+
+.deal-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.deal-context-grid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1628,6 +1764,45 @@ body::before {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.action-panel {
+  margin-bottom: 28px;
+}
+
+.action-panel h3 {
+  margin: 8px 0 16px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-tile {
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  padding: 14px;
+  text-align: left;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.action-tile:hover {
+  border-color: rgba(245, 165, 36, 0.25);
+  background: rgba(245, 165, 36, 0.06);
+}
+
+.action-link {
+  cursor: pointer;
 }
 
 /* Toast */
@@ -1829,6 +2004,66 @@ body::before {
   min-width: 0;
 }
 
+.search-starter {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1.2fr);
+  gap: 22px;
+  align-items: center;
+  padding: 26px;
+}
+
+.search-starter .glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  margin-bottom: 14px;
+  color: var(--ink-2);
+}
+
+.search-starter h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.search-starter p {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.prompt-grid button {
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-2);
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.prompt-grid button:hover {
+  color: var(--ink-1);
+  border-color: rgba(245, 165, 36, 0.22);
+  background: rgba(245, 165, 36, 0.065);
+}
+
 /* ============================================================
    Modal
    ============================================================ */
@@ -2021,6 +2256,8 @@ dialog::backdrop {
   }
 
   .detail-grid,
+  .deal-context-grid,
+  .action-grid,
   .summary-grid {
     grid-template-columns: 1fr;
   }
@@ -2099,7 +2336,8 @@ dialog::backdrop {
   }
 
   .command-grid,
-  .edge-grid {
+  .edge-grid,
+  .search-starter {
     grid-template-columns: 1fr;
   }
 
@@ -2124,6 +2362,10 @@ dialog::backdrop {
   }
 
   .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-grid {
     grid-template-columns: 1fr;
   }
 

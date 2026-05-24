@@ -16,6 +16,14 @@ interface TrendPoint {
   count: number;
 }
 
+interface PreCallBrief {
+  objective: string;
+  opener: string;
+  likelyObjection: string;
+  mustSecure: string;
+  proofPoint: string;
+}
+
 function buildSparkPath(
   points: TrendPoint[],
   w: number,
@@ -102,6 +110,46 @@ function signed(n: number | null): string {
 function callTypeLabel(type: string): string {
   if (type === 'bd') return 'BD';
   return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function firstName(name: string | undefined): string {
+  return name?.split(' ').filter(Boolean)[0] ?? 'them';
+}
+
+function meetingPersona(meeting: UpcomingMeeting, contact: Contact | undefined): string {
+  const text = `${meeting.title} ${contact?.role ?? ''} ${contact?.company ?? ''}`.toLowerCase();
+  if (text.includes('investor') || text.includes('venture') || text.includes('fund')) {
+    return 'investor';
+  }
+  if (text.includes('customer') || text.includes('renewal')) return 'customer';
+  if (text.includes('partner') || text.includes('bd')) return 'partner';
+  return 'buyer';
+}
+
+function buildPreCallBrief(
+  meeting: UpcomingMeeting,
+  contact: Contact | undefined,
+  coach: CoachAnalytics | null,
+): PreCallBrief {
+  const persona = meetingPersona(meeting, contact);
+  const name = firstName(contact?.name ?? meeting.attendees.find(a => !a.isOrganizer)?.name);
+  const friction = coach?.topObjection?.objection ?? 'unclear decision criteria';
+  const weak = coach?.weakestDimension?.label ?? 'mutual action plan';
+  const objective =
+    persona === 'investor'
+      ? 'Prove the compounding loop and secure the next diligence step.'
+      : persona === 'partner'
+        ? 'Turn interest into a named owner, commercial motion, and launch date.'
+        : persona === 'customer'
+          ? 'Confirm success criteria, risk, and the next production commitment.'
+          : 'Lock the business outcome, owner, date, and success metric.';
+  return {
+    objective,
+    opener: `${name}, before I show anything, what would make this conversation a clear win for you?`,
+    likelyObjection: friction,
+    mustSecure: 'Owner, date, success metric, and the next calendar hold.',
+    proofPoint: `Bring proof that addresses ${friction.toLowerCase()} and make ${weak.toLowerCase()} explicit.`,
+  };
 }
 
 function CoachFocusCard({ coach, loading }: { coach: CoachAnalytics | null; loading: boolean }) {
@@ -219,7 +267,11 @@ export default function Home() {
       <section className="command-grid">
         <CoachFocusCard coach={coachData} loading={coach.isLoading} />
         <LoopCard coach={coachData} />
-        <NextMeetingCard meeting={nextMeeting.data ?? null} contacts={contacts.data ?? []} />
+        <NextMeetingCard
+          meeting={nextMeeting.data ?? null}
+          contacts={contacts.data ?? []}
+          coach={coachData}
+        />
       </section>
 
       <div className="stat-grid">
@@ -363,9 +415,11 @@ function minutesFromNow(ts: number): number {
 function NextMeetingCard({
   meeting,
   contacts,
+  coach,
 }: {
   meeting: UpcomingMeeting | null;
   contacts: Contact[];
+  coach: CoachAnalytics | null;
 }) {
   const navigate = useNavigate();
   if (!meeting) {
@@ -384,6 +438,7 @@ function NextMeetingCard({
   const matched = primary?.email
     ? contacts.find(c => c.email?.toLowerCase() === primary.email.toLowerCase())
     : undefined;
+  const brief = buildPreCallBrief(meeting, matched, coach);
 
   return (
     <article className="command-card meeting-card">
@@ -398,6 +453,28 @@ function NextMeetingCard({
             ? ` +${meeting.attendees.length - shown.length}`
             : ''}
         </p>
+        <div className="precall-brief">
+          <div className="brief-row">
+            <span>Objective</span>
+            <strong>{brief.objective}</strong>
+          </div>
+          <div className="brief-row">
+            <span>Opener</span>
+            <strong>{brief.opener}</strong>
+          </div>
+          <div className="brief-row">
+            <span>Likely pushback</span>
+            <strong>{brief.likelyObjection}</strong>
+          </div>
+          <div className="brief-row">
+            <span>Must secure</span>
+            <strong>{brief.mustSecure}</strong>
+          </div>
+          <div className="brief-row">
+            <span>Proof point</span>
+            <strong>{brief.proofPoint}</strong>
+          </div>
+        </div>
       </div>
       <div className="meeting-actions">
         {meeting.meetingLink && (

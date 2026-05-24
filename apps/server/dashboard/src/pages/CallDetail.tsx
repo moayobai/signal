@@ -1,8 +1,14 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { userFacingLabel } from '@signal/types';
-import { api, type CallScorecard } from '../lib/api';
+import {
+  api,
+  type CallScorecard,
+  type CallSession,
+  type CallSummaryRow,
+  type Contact,
+} from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import {
   CheckIcon,
@@ -57,6 +63,7 @@ export default function CallDetail() {
   const [expandedFrames, setExpandedFrames] = useState<Set<number>>(new Set());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [copiedAction, setCopiedAction] = useState<string | null>(null);
 
   useEffect(() => {
     if (summaryQ.data) setDraft(summaryQ.data.followUpDraft);
@@ -105,6 +112,12 @@ export default function CallDetail() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  function copyOperationalText(kind: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedAction(kind);
+    setTimeout(() => setCopiedAction(null), 1500);
+  }
+
   function speakerLabel(speaker: string): string {
     const s = speaker.toLowerCase();
     if (s === 'user' || s === 'me' || s === 'self') return 'You';
@@ -136,6 +149,8 @@ export default function CallDetail() {
           />
         </div>
       </header>
+
+      <DealContextPanel call={call} summary={summaryQ.data ?? null} contact={contactQ.data} />
 
       {summaryQ.data ? (
         <>
@@ -179,6 +194,14 @@ export default function CallDetail() {
           </div>
 
           {summaryQ.data.scorecard && <ScorecardSection scorecard={summaryQ.data.scorecard} />}
+
+          <PostCallActionPanel
+            call={call}
+            summary={summaryQ.data}
+            contact={contactQ.data}
+            copiedAction={copiedAction}
+            onCopy={copyOperationalText}
+          />
 
           <article className={`followup-card ${editing ? 'editing' : ''}`}>
             <div className="head">
@@ -307,6 +330,135 @@ export default function CallDetail() {
         </div>
       </article>
     </div>
+  );
+}
+
+function callObjective(type: string): string {
+  switch (type) {
+    case 'investor':
+      return 'Secure conviction, proof request, and the next diligence step.';
+    case 'enterprise':
+      return 'Confirm business pain, economic buyer, pilot criteria, and next owner.';
+    case 'bd':
+      return 'Define partner motion, commercial owner, and launch path.';
+    case 'customer':
+      return 'Protect trust, surface risk, and confirm production next step.';
+    default:
+      return 'Lock business outcome, owner, date, and success metric.';
+  }
+}
+
+function firstSummaryItem(items: string[], fallback: string): string {
+  return items.find(item => item.trim().length > 0) ?? fallback;
+}
+
+function DealContextPanel({
+  call,
+  summary,
+  contact,
+}: {
+  call: CallSession;
+  summary: CallSummaryRow | null;
+  contact?: Contact;
+}) {
+  const risk = summary
+    ? firstSummaryItem(summary.objections, 'No blocker captured.')
+    : 'Awaiting summary.';
+  const next = summary
+    ? firstSummaryItem(summary.decisions, 'No next step captured.')
+    : 'Awaiting summary.';
+  return (
+    <article className="deal-context-card">
+      <div className="label">
+        <TargetIcon size={11} /> Deal context
+      </div>
+      <div className="deal-context-grid">
+        <div>
+          <span>Objective</span>
+          <strong>{callObjective(call.callType)}</strong>
+        </div>
+        <div>
+          <span>Buyer</span>
+          <strong>{contact?.name ?? 'Unknown prospect'}</strong>
+        </div>
+        <div>
+          <span>Risk</span>
+          <strong>{risk}</strong>
+        </div>
+        <div>
+          <span>Next step</span>
+          <strong>{next}</strong>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function buildCrmNote(summary: CallSummaryRow, contact?: Contact): string {
+  const who = contact
+    ? `${contact.name}${contact.company ? ` (${contact.company})` : ''}`
+    : 'Prospect';
+  return [
+    `Call note: ${who}`,
+    '',
+    `Win signals: ${summary.winSignals.join('; ') || 'None captured'}`,
+    `Objections: ${summary.objections.join('; ') || 'None captured'}`,
+    `Decisions: ${summary.decisions.join('; ') || 'None captured'}`,
+    '',
+    `Follow-up draft:\n${summary.followUpDraft}`,
+  ].join('\n');
+}
+
+function buildNextTask(summary: CallSummaryRow, contact?: Contact): string {
+  const decision = firstSummaryItem(summary.decisions, 'Confirm owner, date, and success metric');
+  return `${decision}${contact ? ` with ${contact.name}` : ''}`;
+}
+
+function PostCallActionPanel({
+  summary,
+  contact,
+  copiedAction,
+  onCopy,
+}: {
+  call: CallSession;
+  summary: CallSummaryRow;
+  contact?: Contact;
+  copiedAction: string | null;
+  onCopy: (kind: string, text: string) => void;
+}) {
+  const crmNote = buildCrmNote(summary, contact);
+  const task = buildNextTask(summary, contact);
+  const prepSeed = `Next call prep: handle "${firstSummaryItem(summary.objections, 'open decision risk')}" and secure "${firstSummaryItem(summary.decisions, 'the next dated commitment')}".`;
+
+  return (
+    <article className="action-panel">
+      <div>
+        <div className="label">
+          <SparkIcon size={11} /> Operational loop
+        </div>
+        <h3>Turn the debrief into motion</h3>
+      </div>
+      <div className="action-grid">
+        <button className="action-tile" onClick={() => onCopy('crm', crmNote)}>
+          <span>CRM note</span>
+          <strong>{copiedAction === 'crm' ? 'Copied' : 'Copy clean note'}</strong>
+        </button>
+        <button className="action-tile" onClick={() => onCopy('task', task)}>
+          <span>Next task</span>
+          <strong>{copiedAction === 'task' ? 'Copied' : task}</strong>
+        </button>
+        <button className="action-tile" onClick={() => onCopy('prep', prepSeed)}>
+          <span>Prep seed</span>
+          <strong>{copiedAction === 'prep' ? 'Copied' : prepSeed}</strong>
+        </button>
+        {contact && (
+          <Link className="action-tile action-link" to={`/contacts/${contact.id}`}>
+            <span>Relationship</span>
+            <strong>Open {contact.name}</strong>
+          </Link>
+        )}
+      </div>
+    </article>
   );
 }
 

@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useMemo } from 'react';
-import { api, type CallSession } from '../lib/api';
+import { api, type CallSession, type CallSummaryRow, type Contact } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, SparkIcon, WarnIcon, CloseIcon } from '../components/icons';
 
@@ -32,6 +32,14 @@ function formatWhen(ts: number): string {
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function latest<T>(items: T[]): T | null {
+  return items.length > 0 ? items[0] : null;
+}
+
+function firstItem(values: string[] | undefined, fallback: string): string {
+  return values?.find(v => v.trim().length > 0) ?? fallback;
 }
 
 export default function ContactDetail() {
@@ -79,6 +87,35 @@ export default function ContactDetail() {
       (callsQ.data ?? []).filter(c => c.contactId === id).sort((a, b) => b.startedAt - a.startedAt),
     [callsQ.data, id],
   );
+  const summariesQ = useQuery({
+    queryKey: ['contact-summaries', id, myCalls.map(c => c.id).join(',')],
+    queryFn: () =>
+      Promise.all(
+        myCalls.slice(0, 12).map(c =>
+          api
+            .summary(c.id)
+            .then(summary => ({ sessionId: c.id, summary }))
+            .catch(() => null),
+        ),
+      ),
+    enabled: myCalls.length > 0,
+    retry: false,
+  });
+  const summaries = useMemo(
+    () =>
+      (summariesQ.data ?? []).filter(
+        (row): row is { sessionId: string; summary: CallSummaryRow } => row != null,
+      ),
+    [summariesQ.data],
+  );
+  const summaryBySession = useMemo(
+    () => new Map(summaries.map(row => [row.sessionId, row.summary])),
+    [summaries],
+  );
+  const visibleCalls =
+    filterObjection && summaries.length > 0
+      ? myCalls.filter(c => summaryBySession.get(c.id)?.objections.includes(filterObjection))
+      : myCalls;
   const sentVals = myCalls.map(c => c.sentimentAvg).filter((s): s is number => s != null);
   const avgSent = sentVals.length ? sentVals.reduce((a, b) => a + b, 0) / sentVals.length : null;
 
@@ -211,13 +248,17 @@ export default function ContactDetail() {
             </div>
           )}
 
-          {myCalls.length === 0 ? (
+          {visibleCalls.length === 0 ? (
             <div className="empty glass">
-              <p>No calls with this contact yet.</p>
+              <p>
+                {filterObjection
+                  ? 'No calls match that objection filter.'
+                  : 'No calls with this contact yet.'}
+              </p>
             </div>
           ) : (
             <ul className="contact-calls">
-              {myCalls.map(c => (
+              {visibleCalls.map(c => (
                 <li key={c.id}>
                   <Link to={`/calls/${c.id}`} className="call-row">
                     <SentimentRing value={c.sentimentAvg} size={42} stroke={4} />
@@ -247,6 +288,14 @@ export default function ContactDetail() {
 
         {/* Right column: OctaMem panel + objections aggregation */}
         <div className="side-stack">
+          <ContactMemoryPanel
+            contact={contact}
+            calls={myCalls}
+            summaries={summaries}
+            topObjection={objQ.data?.[0]?.objection ?? null}
+            loading={summariesQ.isLoading}
+          />
+
           <article className="octamem">
             <div className="head">
               <SparkIcon size={11} /> What SIGNAL remembers
@@ -283,7 +332,7 @@ export default function ContactDetail() {
                       type="button"
                       className="obj-row"
                       key={i}
-                      title="Click to filter calls (coming soon)"
+                      title="Filter calls by this objection"
                       onClick={() => {
                         setFilterObjection(o.objection);
                         document
@@ -319,5 +368,64 @@ export default function ContactDetail() {
         </div>
       )}
     </div>
+  );
+}
+
+function ContactMemoryPanel({
+  contact,
+  calls,
+  summaries,
+  topObjection,
+  loading,
+}: {
+  contact: Contact;
+  calls: CallSession[];
+  summaries: Array<{ sessionId: string; summary: CallSummaryRow }>;
+  topObjection: string | null;
+  loading: boolean;
+}) {
+  const latestCall = latest(calls);
+  const latestSummary = latest(summaries)?.summary ?? null;
+  const lastDecision = firstItem(latestSummary?.decisions, 'No decision captured yet.');
+  const lastWin = firstItem(latestSummary?.winSignals, 'No win signal captured yet.');
+  const nextAsk = topObjection
+    ? `Ask what proof would remove "${topObjection}" from the decision.`
+    : 'Ask what would make the next call a clear yes/no decision.';
+  const talkRatio =
+    latestCall?.talkRatio != null ? `${Math.round(latestCall.talkRatio * 100)}% you` : 'No read';
+
+  return (
+    <article className="relationship-card">
+      <div className="head">
+        <SparkIcon size={11} /> Relationship edge
+      </div>
+      <div className="memory-grid">
+        <div className="memory-item">
+          <span>What they care about</span>
+          <strong>{contact.notes || 'Capture notes after the next conversation.'}</strong>
+        </div>
+        <div className="memory-item">
+          <span>Last win</span>
+          <strong>{loading ? 'Reading calls...' : lastWin}</strong>
+        </div>
+        <div className="memory-item">
+          <span>Open promise</span>
+          <strong>{loading ? 'Reading calls...' : lastDecision}</strong>
+        </div>
+        <div className="memory-item">
+          <span>Risk to handle</span>
+          <strong>{topObjection ?? 'No recurring objection yet.'}</strong>
+        </div>
+      </div>
+      <div className="next-ask">
+        <span>Next ask</span>
+        <strong>{nextAsk}</strong>
+      </div>
+      <div className="deal-strip">
+        <span>{calls.length} calls</span>
+        <span>{talkRatio}</span>
+        <span>{contact.role || 'Role unknown'}</span>
+      </div>
+    </article>
   );
 }

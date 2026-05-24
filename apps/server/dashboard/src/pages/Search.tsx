@@ -20,6 +20,15 @@ function formatWhen(ts: number | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const SEARCH_PROMPTS = [
+  'Which calls had security objections?',
+  'Where did an investor ask for proof?',
+  'What deals mention pricing risk?',
+  'Show moments of strong buying intent',
+  'Where did we fail to secure next steps?',
+  'What should I prepare before the next call?',
+];
+
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const initial = params.get('q') ?? '';
@@ -117,11 +126,24 @@ export default function Search() {
       </div>
 
       {q.length === 0 && (
-        <div className="empty glass">
-          <div className="glyph">
-            <SearchIcon />
+        <div className="search-starter glass">
+          <div>
+            <div className="glyph">
+              <SearchIcon />
+            </div>
+            <h2>Ask Signal like a deal room.</h2>
+            <p>
+              Start from a revenue question, not a keyword. The best searches uncover risk, proof,
+              urgency, and promises across every call.
+            </p>
           </div>
-          <p>Type a question above. Results appear as you type.</p>
+          <div className="prompt-grid">
+            {SEARCH_PROMPTS.map(prompt => (
+              <button type="button" key={prompt} onClick={() => setInput(prompt)}>
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
