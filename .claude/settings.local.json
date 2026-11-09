@@ -74,7 +74,27 @@
       "Bash(echo \"Exit: $?\")",
       "Bash(pnpm run *)",
       "Bash(chmod +x \"/Users/mahomedayob/SIGNAL BUILD/scripts/google-oauth.mjs\")",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(cd apps/server && cat package.json tsconfig.json vitest.config.ts .env.example Dockerfile fly.toml; find src -type f | xargs wc -l; ls ../.. ; ls node_modules | head)",
+      "Bash(npx -y pnpm@9.15.9 install --frozen-lockfile --filter extension...)",
+      "Bash(npx vitest *)",
+      "Bash(cd apps/server/dashboard/src; grep -oh \"\\\\-\\\\-[a-z0-9-]*:\" styles.css | sort -u | tr -d ':' > /tmp/defined.txt; grep -oh \"var\\(--[a-z0-9-]*\" -r . | sed 's/var\\(//' | sort -u > /tmp/used.txt; comm -13 /tmp/defined.txt /tmp/used.txt; grep -n \"frame-row\\\\|pt-\\\\\\(ASK\\\\|WARN\\\\|CLOSE\\\\|REFRAME\\\\|BODY\\\\|SILENCE\\\\|IDLE\\\\\\)\\\\|speaker\\\\.\\\\|\\\\.speaker\" styles.css | head -30)",
+      "Bash(npx eslint *)",
+      "Bash(python3 -)",
+      "Bash(npx wxt *)",
+      "Bash(cat)",
+      "Bash(npx -y pnpm@9.15.9 install --filter server --filter dashboard --frozen-lockfile)",
+      "Bash(PATH=__TRACKED_VAR__/node_modules/.bin:__TRACKED_VAR__ npx -y pnpm@9.15.9 run build)",
+      "Bash(cp src/routes/ws.ts /tmp/ws.fixed.ts && git show HEAD:apps/server/src/routes/ws.ts > src/routes/ws.ts && npx vitest run src/routes/ws.test.ts 2>&1 | grep -E \"^\\\\s+\\(✓|×\\)|Tests \" ; cp /tmp/ws.fixed.ts src/routes/ws.ts && git diff --stat)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(git -C ../.. status --short)",
+      "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\).on\\(\"end\",\\(\\)=>{for\\(const f of JSON.parse\\(d\\)\\) if\\(f.messages.length\\) console.log\\(f.messages.length, f.filePath.split\\(\"agent-3/\"\\)[1]\\)}\\)')",
+      "Read(//app/**)",
+      "Bash(mkdir -p /tmp/pnpmbin)",
+      "Bash(npm i *)",
+      "Bash(corepack pnpm *)",
+      "Bash(grep -on \"'/api/[^']*'\\\\|\\\\`/api/[^\\\\`]*\\\\`\" apps/server/dashboard/src/lib/api.ts)"
     ]
   }
 }
