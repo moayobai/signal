@@ -6,17 +6,23 @@ export function OctaMemPanel({ prospect }: { prospect: Prospect }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!prospect.name) { setContext(null); return; }
+    // Clearing the name mid-request must not leave the panel stuck on "Loading…".
+    if (!prospect.name) { setContext(null); setLoading(false); return; }
+    let cancelled = false;
     setLoading(true);
     const timer = setTimeout(async () => {
+      let next: string | null = null;
       try {
         // Query through background (which knows the server URL)
         const res = await chrome.runtime.sendMessage({ type: 'OCTAMEM_QUERY', prospect });
-        setContext(res?.context ?? null);
-      } catch { setContext(null); }
+        next = res?.context ?? null;
+      } catch { /* treat as no context */ }
+      // Ignore responses for a prospect the user has since edited away from.
+      if (cancelled) return;
+      setContext(next);
       setLoading(false);
     }, 500);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [prospect.name, prospect.company]);
 
   return (
