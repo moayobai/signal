@@ -23,25 +23,32 @@ export function playNudgeTone(): void {
     // localStorage can throw in cross-origin / sandboxed contexts — ignore.
   }
 
-  const ctx = new AudioContext();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+  let ctx: AudioContext | null = null;
+  try {
+    ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  osc.type = 'sine';
-  osc.frequency.value = 440;
+    osc.type = 'sine';
+    osc.frequency.value = 440;
 
-  const now = ctx.currentTime;
-  const peak = 0.1; // ~ -20dB
-  // Start silent, ramp up over 8ms, then exponential decay over 72ms.
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(peak, now + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.080);
+    const now = ctx.currentTime;
+    const peak = 0.1; // ~ -20dB
+    // Start silent, ramp up over 8ms, then exponential decay over 72ms.
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(peak, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.080);
 
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.085);
-  // Free the context shortly after so we don't leak one per call.
-  osc.onended = () => {
-    ctx.close().catch(() => { /* ignore */ });
-  };
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.085);
+    // Free the context shortly after so we don't leak one per call.
+    const owned = ctx;
+    osc.onended = () => {
+      owned.close().catch(() => { /* ignore */ });
+    };
+  } catch {
+    // Audio is best-effort — never let a failed beep take down the HUD.
+    ctx?.close().catch(() => { /* ignore */ });
+  }
 }

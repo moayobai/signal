@@ -12,16 +12,10 @@ const nodeGlobals = {
   URLSearchParams: 'readonly',
 };
 
-/** @type {import('eslint').Linter.FlatConfig[]} */
+/** @type {import('eslint').Linter.Config[]} */
 export default [
   {
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/.output/**',
-      '**/public/**',
-      '**/*.d.ts',
-    ],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/public/**', '**/*.d.ts'],
   },
   js.configs.recommended,
   {
@@ -52,7 +46,10 @@ export default [
       'no-undef': 'off',
       'no-unused-vars': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-non-null-assertion': 'warn',
 

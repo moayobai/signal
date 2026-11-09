@@ -34,3 +34,11 @@ describe('generateSummary', () => {
     expect(res).toBeNull();
   });
 });
+
+describe('generateSummary — fenced model output (regression)', () => {
+  it('parses a summary wrapped in a ``` code fence', async () => {
+    const ai = { complete: async () => '```\n' + VALID_JSON + '\n```' };
+    const res = await generateSummary({ ai, model: 'x', callType: 'investor', transcript: [] });
+    expect(res?.decisions).toEqual(['Send deck']);
+  });
+});

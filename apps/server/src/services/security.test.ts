@@ -60,3 +60,38 @@ describe('security', () => {
     await app.close();
   });
 });
+
+describe('security — regressions', () => {
+  it('does not 500 when an unrelated cookie has malformed percent-encoding', async () => {
+    const app = await buildSecuredApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/private',
+      headers: { cookie: 'other=%E0%A4%A; signal_auth=test-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('marks the auth cookie Secure behind an HTTPS proxy', async () => {
+    const app = await buildSecuredApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/private?token=test-token',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    expect(String(res.headers['set-cookie'])).toContain('; Secure');
+    await app.close();
+  });
+
+  it('falls back to the default rate limit when the configured max is NaN', async () => {
+    const app = Fastify({ logger: false });
+    await registerSecurity(app, { authToken: 't', rateLimitMax: Number('abc'), rateLimitWindow: '' });
+    app.get('/api/private', async () => ({ ok: true }));
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/api/private', headers: { authorization: 'Bearer t' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['x-ratelimit-limit']).toBe('120');
+    await app.close();
+  });
+});

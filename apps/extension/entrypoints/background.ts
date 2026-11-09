@@ -1,57 +1,54 @@
-import type { ClientMessage, ServerMessage, Prospect, CallType } from '@signal/types';
-import { shouldReconnectAfterClose, stopMediaStreamTracks } from '../lib/captureLifecycle';
+import type { Prospect, CallType, ServerMessage } from '@signal/types';
+import { httpBaseFromWsUrl } from '../lib/captureSession';
+import type { OffscreenCommand, OffscreenEvent, StartCaptureResult } from '../lib/messages';
+import { platformFromUrl } from '../lib/platform';
+import { viewAfterCaptureEnded, type StoredPopupState } from '../lib/popupState';
 
 declare const __WS_URL__: string;
 declare const __SIGNAL_AUTH_TOKEN__: string;
 
-const WS_URL = (typeof __WS_URL__ !== 'undefined' ? __WS_URL__ : 'ws://localhost:8080') + '/ws';
+const WS_BASE = typeof __WS_URL__ !== 'undefined' ? __WS_URL__ : 'ws://localhost:8080';
+const WS_URL = WS_BASE.replace(/\/+$/, '') + '/ws';
+const HTTP_BASE = httpBaseFromWsUrl(WS_BASE);
 const SIGNAL_AUTH_TOKEN = typeof __SIGNAL_AUTH_TOKEN__ !== 'undefined' ? __SIGNAL_AUTH_TOKEN__ : '';
-const MAX_RECONNECT_ATTEMPTS = 3;
-const RECONNECT_DELAYS = [1000, 2000, 4000] as const;
-
-let wsocket: WebSocket | null = null;
-let recorder: MediaRecorder | null = null;
-let frameInterval: ReturnType<typeof setInterval> | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let activeStream: MediaStream | null = null;
-let activeTabId: number | null = null;
-let reconnectAttempt = 0;
-let intentionalStop = false;
+const OFFSCREEN_PATH = 'offscreen.html';
 
 export default defineBackground(() => {
-  chrome.runtime.onMessage.addListener((msg: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+  chrome.runtime.onMessage.addListener((msg: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+    // Commands addressed to the offscreen document also reach us — ignore them.
+    if (msg?.target === 'offscreen') return;
+
+    if (msg?.target === 'background') {
+      void handleOffscreenEvent(msg as OffscreenEvent);
+      return;
+    }
+
     if (msg.type === 'PROSPECT_DETECTED') {
       const first = (msg.names as string[]).find(n => n.length > 1);
       if (first) {
-        chrome.storage.session.set({
-          detectedProspect: { name: first },
-          pendingPlatform: msg.platform ?? 'meet',
-        });
+        chrome.storage.session.set({ detectedProspect: { name: first } });
       }
       sendResponse({ ok: true });
       return;
     }
 
     if (msg.type === 'POPUP_START_REQUEST') {
-      // User clicked Start Call — kick off capture on last active tab
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]: chrome.tabs.Tab[]) => {
-        if (tab?.id != null) {
-          activeTabId = tab.id;
-          startCapture(() => sendResponse({ ok: true }));
-        }
-      });
+      chrome.tabs.query({ active: true, lastFocusedWindow: true })
+        .then(([tab]: chrome.tabs.Tab[]) => {
+          if (tab?.id == null) return { ok: false, error: 'No active tab to capture' } as StartCaptureResult;
+          return startCapture(tab);
+        })
+        .catch((err: unknown) => ({ ok: false, error: errorMessage(err) }) as StartCaptureResult)
+        .then(sendResponse);
       return true;
     }
 
     if (msg.type === 'STOP_CAPTURE') {
-      stopCapture();
-      sendResponse({ ok: true });
-      return;
+      stopCapture().then(() => sendResponse({ ok: true }), () => sendResponse({ ok: true }));
+      return true;
     }
 
     if (msg.type === 'OCTAMEM_QUERY') {
-      // Popup can't hit the server directly with auth headers from popup context in some setups —
-      // simplest is to GET through a Fastify proxy or call directly. For self-hosted, direct fetch works.
       queryOctaMem(msg.prospect as Prospect).then(context => sendResponse({ context })).catch(() => sendResponse({ context: null }));
       return true;
     }
@@ -75,8 +72,7 @@ interface NextMeetingResponse {
 
 async function fetchNextMeeting(): Promise<NextMeetingResponse | null> {
   try {
-    const base = __WS_URL__.replace(/^ws/, 'http');
-    const res = await fetch(`${base}/api/calendar/next`, { headers: authHeaders() });
+    const res = await fetch(`${HTTP_BASE}/api/calendar/next`, { headers: authHeaders() });
     if (!res.ok) return null;
     return await res.json() as NextMeetingResponse | null;
   } catch { return null; }
@@ -85,8 +81,7 @@ async function fetchNextMeeting(): Promise<NextMeetingResponse | null> {
 async function queryOctaMem(prospect: Prospect): Promise<string | null> {
   if (!prospect?.name) return null;
   try {
-    const base = __WS_URL__.replace(/^ws/, 'http');
-    const res = await fetch(`${base}/api/octamem/query`, {
+    const res = await fetch(`${HTTP_BASE}/api/octamem/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ prospect }),
@@ -95,31 +90,6 @@ async function queryOctaMem(prospect: Prospect): Promise<string | null> {
     const data = await res.json() as { context: string | null };
     return data.context;
   } catch { return null; }
-}
-
-function startCapture(sendResponse: (r: unknown) => void): void {
-  intentionalStop = false;
-  if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  // Capture both audio and video so we can extract frames for Hume AI face analysis.
-  // Video capture may be denied on some platforms — we fall back to audio-only.
-  chrome.tabCapture.capture({ audio: true, video: true }, (stream: MediaStream | null) => {
-    if (!stream) {
-      // Fallback: audio-only (Hume face analysis will be unavailable)
-      chrome.tabCapture.capture({ audio: true, video: false }, (audioStream: MediaStream | null) => {
-        if (!audioStream) {
-          sendResponse({ error: chrome.runtime.lastError?.message ?? 'capture failed' });
-          return;
-        }
-        activeStream = audioStream;
-        connectWs(audioStream);
-        sendResponse({ ok: true });
-      });
-      return;
-    }
-    activeStream = stream;
-    connectWs(stream);
-    sendResponse({ ok: true });
-  });
 }
 
 function authHeaders(): Record<string, string> {
@@ -133,136 +103,87 @@ function authenticatedWsUrl(): string {
   return url.toString();
 }
 
-async function connectWs(stream: MediaStream): Promise<void> {
-  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType', 'pendingPlatform']) as Record<string, any>;
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+let creatingOffscreen: Promise<void> | null = null;
+
+async function hasOffscreenDocument(): Promise<boolean> {
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+  });
+  return contexts.length > 0;
+}
+
+async function ensureOffscreenDocument(): Promise<void> {
+  if (await hasOffscreenDocument()) return;
+  creatingOffscreen ??= chrome.offscreen.createDocument({
+    url: OFFSCREEN_PATH,
+    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+    justification: 'Capture call audio/video from the meeting tab and stream it to the SIGNAL server.',
+  }).finally(() => { creatingOffscreen = null; });
+  await creatingOffscreen;
+}
+
+async function startCapture(tab: chrome.tabs.Tab): Promise<StartCaptureResult> {
+  const tabId = tab.id!;
+  // A tab can only have one active capture — tear down any previous call first.
+  if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument();
+
+  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+  const stored = await chrome.storage.session.get(['pendingProspect', 'pendingCallType']) as Record<string, any>;
   const prospect: Prospect = stored.pendingProspect ?? { name: 'Unknown' };
   const callType: CallType = stored.pendingCallType ?? 'enterprise';
-  const platform: 'meet' | 'zoom' | 'teams' = stored.pendingPlatform ?? 'meet';
+  const platform = platformFromUrl(tab.url) ?? 'meet';
 
-  if (intentionalStop) return;
-
-  const ws = new WebSocket(authenticatedWsUrl());
-  wsocket = ws;
-
-  ws.onopen = () => {
-    reconnectAttempt = 0;
-    const startMsg: ClientMessage = { type: 'start', platform, callType, prospect };
-    ws.send(JSON.stringify(startMsg));
-    startRecorder(stream, ws);
-    startVideoFramer(stream, ws);
+  await ensureOffscreenDocument();
+  const command: OffscreenCommand = {
+    target: 'offscreen',
+    type: 'OFFSCREEN_START',
+    streamId,
+    url: authenticatedWsUrl(),
+    startMessage: { type: 'start', platform, callType, prospect },
   };
+  const result = await chrome.runtime.sendMessage(command) as StartCaptureResult | undefined;
+  if (!result?.ok) return result ?? { ok: false, error: 'Capture did not start' };
 
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data as string) as ServerMessage;
-      if (activeTabId !== null) {
-        chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
-      }
-      if (msg.type === 'summary') {
-        chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
-      }
-    } catch { /* ignore */ }
-  };
-
-  ws.onerror = (err) => console.error('[SIGNAL] WS error:', err);
-
-  ws.onclose = () => {
-    if (wsocket === ws) wsocket = null;
-    stopRecorder();
-    stopVideoFramer();
-    if (shouldReconnectAfterClose({
-      intentionalStop,
-      reconnectAttempt,
-      maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
-    })) {
-      const delay = RECONNECT_DELAYS[reconnectAttempt] ?? 4000;
-      reconnectAttempt++;
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        void connectWs(stream);
-      }, delay);
-    }
-  };
+  await chrome.storage.session.remove(['latestSummary']);
+  await chrome.storage.session.set({ captureActive: true, activeTabId: tabId, popupView: 'live' });
+  return { ok: true };
 }
 
-function startRecorder(stream: MediaStream, ws: WebSocket): void {
-  const mimeType = 'audio/webm;codecs=opus';
-  if (!MediaRecorder.isTypeSupported(mimeType)) return;
-  const rec = new MediaRecorder(stream, { mimeType });
-  recorder = rec;
-  rec.ondataavailable = (e) => {
-    if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-      void e.data.arrayBuffer().then(buf => ws.send(buf));
-    }
-  };
-  rec.start(250);
-}
-
-function startVideoFramer(stream: MediaStream, ws: WebSocket): void {
-  const videoTrack = stream.getVideoTracks()[0];
-  if (!videoTrack) return; // audio-only fallback — no video available
-
-  // ImageCapture API: grab still frames from the live video track.
-  // OffscreenCanvas downscales to 640×360 to keep payload small (~15–30 KB/frame).
-  const imageCapture = new ImageCapture(videoTrack);
-  const FRAME_INTERVAL_MS = 4000;
-  const TARGET_WIDTH = 640;
-  const TARGET_HEIGHT = 360;
-
-  frameInterval = setInterval(async () => {
-    if (ws.readyState !== WebSocket.OPEN) return;
-    try {
-      const bitmap = await imageCapture.grabFrame();
-      const scale = Math.min(TARGET_WIDTH / bitmap.width, TARGET_HEIGHT / bitmap.height, 1);
-      const w = Math.round(bitmap.width * scale);
-      const h = Math.round(bitmap.height * scale);
-      const canvas = new OffscreenCanvas(w, h);
-      const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
-      ctx.drawImage(bitmap, 0, 0, w, h);
-      bitmap.close();
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
-      const buffer = await blob.arrayBuffer();
-      // btoa over chunked bytes to avoid call-stack overflow on large frames
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      const CHUNK = 8192;
-      for (let i = 0; i < bytes.length; i += CHUNK) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-      }
-      const base64 = btoa(binary);
-      ws.send(JSON.stringify({ type: 'video_frame', data: base64 } satisfies ClientMessage));
-    } catch {
-      // Track ended or permission revoked — clear the interval
-      stopVideoFramer();
-    }
-  }, FRAME_INTERVAL_MS);
-}
-
-function stopVideoFramer(): void {
-  if (frameInterval !== null) { clearInterval(frameInterval); frameInterval = null; }
-}
-
-function stopRecorder(): void {
-  if (recorder?.state !== 'inactive') recorder?.stop();
-  recorder = null;
-}
-
-function stopMediaStream(): void {
-  stopMediaStreamTracks(activeStream);
-  activeStream = null;
-}
-
-function stopCapture(): void {
-  intentionalStop = true;
-  if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  stopRecorder();
-  stopVideoFramer();
-  if (wsocket) {
-    if (wsocket.readyState === WebSocket.OPEN) {
-      wsocket.send(JSON.stringify({ type: 'stop' } satisfies ClientMessage));
-    }
-    wsocket.close();
-    wsocket = null;
+async function stopCapture(): Promise<void> {
+  if (await hasOffscreenDocument()) {
+    await chrome.runtime.sendMessage({ target: 'offscreen', type: 'OFFSCREEN_STOP' } satisfies OffscreenCommand);
+  } else {
+    await chrome.storage.session.set({ captureActive: false });
   }
-  stopMediaStream();
+}
+
+async function sendToActiveTab(msg: ServerMessage): Promise<void> {
+  const { activeTabId } = await chrome.storage.session.get('activeTabId') as { activeTabId?: number };
+  if (activeTabId != null) {
+    await chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
+  }
+}
+
+async function handleOffscreenEvent(event: OffscreenEvent): Promise<void> {
+  if (event.type === 'SERVER_MESSAGE') {
+    const msg = event.msg;
+    if (msg.type === 'summary') {
+      await chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
+    }
+    await sendToActiveTab(msg);
+    return;
+  }
+
+  if (event.type === 'CAPTURE_ENDED') {
+    const stored = await chrome.storage.session.get(['latestSummary', 'popupView']) as StoredPopupState;
+    const view = viewAfterCaptureEnded(stored);
+    await chrome.storage.session.set({ captureActive: false, popupView: view });
+    // No summary arrived (connection lost / timed out) — don't leave the HUD stuck on LIVE.
+    if (view !== 'post') await sendToActiveTab({ type: 'state', overlayState: 'IDLE' });
+    if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument().catch(() => {});
+  }
 }

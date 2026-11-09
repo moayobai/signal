@@ -22,19 +22,26 @@ function formatWhen(ts: number | null): string {
 
 export default function Search() {
   const [params, setParams] = useSearchParams();
-  const initial = params.get('q') ?? '';
-  const [input, setInput] = useState(initial);
+  const urlQ = params.get('q') ?? '';
+  const [input, setInput] = useState(urlQ);
   const debounced = useDebounced(input, 400);
 
   // Keep URL ?q in sync with the debounced value so links are shareable.
   useEffect(() => {
-    const current = params.get('q') ?? '';
-    if (debounced === current) return;
-    const next = new URLSearchParams(params);
-    if (debounced) next.set('q', debounced);
-    else next.delete('q');
-    setParams(next, { replace: true });
+    if (debounced === urlQ) return;
+    setParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (debounced) next.set('q', debounced);
+      else next.delete('q');
+      return next;
+    }, { replace: true });
   }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ...and the other way round: when ?q changes from outside the input
+  // (sidebar link, back/forward), reflect it in the box.
+  useEffect(() => {
+    if (urlQ !== debounced) setInput(urlQ);
+  }, [urlQ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const q = debounced.trim();
   const query = useQuery({
@@ -85,6 +92,7 @@ export default function Search() {
         />
         {input && (
           <button
+            type="button"
             onClick={() => setInput('')}
             style={{
               background: 'transparent', border: 'none', color: 'var(--ink-3)',

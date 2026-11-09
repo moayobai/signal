@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, type Contact, type CallSession, type UpcomingMeeting } from '../lib/api';
+import { api, errorMessage, type Contact, type CallSession, type UpcomingMeeting } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, TrendingIcon, SparkIcon, TargetIcon } from '../components/icons';
 
@@ -77,10 +77,11 @@ export default function Home() {
     queryFn: api.nextMeeting,
     refetchInterval: 60_000,
   });
-  const trendPoints = (trend.data ?? []).slice(-6);
+  // The endpoint groups by '%Y-%W' without ORDER BY — sort so "last 6" is really the latest.
+  const trendPoints = [...(trend.data ?? [])].sort((a, b) => a.week.localeCompare(b.week)).slice(-6);
 
   const total = calls.data?.length ?? 0;
-  const sentValues = calls.data?.filter(c => c.sentimentAvg != null).map(c => c.sentimentAvg!) ?? [];
+  const sentValues = (calls.data ?? []).map(c => c.sentimentAvg).filter((v): v is number => v != null);
   const avgSent = sentValues.length ? sentValues.reduce((a, b) => a + b, 0) / sentValues.length : null;
 
   const now = Date.now();
@@ -91,7 +92,7 @@ export default function Home() {
     return age >= WEEK_MS && age < 2 * WEEK_MS;
   }).length ?? 0;
 
-  const talkValues = calls.data?.filter(c => c.talkRatio != null).map(c => c.talkRatio!) ?? [];
+  const talkValues = (calls.data ?? []).map(c => c.talkRatio).filter((v): v is number => v != null);
   const avgTalk = talkValues.length ? talkValues.reduce((a, b) => a + b, 0) / talkValues.length : null;
   const talkPct = avgTalk != null ? Math.round(avgTalk * 100) : null;
   const talkColor = talkPct == null
@@ -172,7 +173,13 @@ export default function Home() {
         <span className="meta">Last {recent.length} sessions</span>
       </div>
 
-      {recent.length === 0 ? (
+      {calls.isError ? (
+        <div className="empty glass" role="alert">
+          <p>{errorMessage(calls.error, 'Failed to load calls')}</p>
+        </div>
+      ) : calls.isPending ? (
+        <div className="skel-card" />
+      ) : recent.length === 0 ? (
         <div className="empty glass">
           <div className="glyph"><SparkIcon /></div>
           <p>No calls yet. Open a meeting and SIGNAL will appear here.</p>
@@ -202,7 +209,7 @@ function NextMeetingCard({ meeting, contacts }: { meeting: UpcomingMeeting | nul
     return (
       <article className="glass" style={{ padding: 16, marginBottom: 20, opacity: 0.7 }}>
         <div className="label" style={{ marginBottom: 4 }}>Next meeting</div>
-        <div style={{ color: 'var(--muted, #8a8a8a)' }}>No meetings in the next hour.</div>
+        <div style={{ color: 'var(--ink-3)' }}>No meetings in the next 15 minutes.</div>
       </article>
     );
   }
@@ -223,7 +230,7 @@ function NextMeetingCard({ meeting, contacts }: { meeting: UpcomingMeeting | nul
         <div style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {meeting.title}
         </div>
-        <div style={{ marginTop: 4, color: 'var(--muted, #8a8a8a)', fontSize: 13 }}>
+        <div style={{ marginTop: 4, color: 'var(--ink-3)', fontSize: 13 }}>
           Starts in <strong>{mins}</strong> min · {shown.map(a => a.name ?? a.email).join(', ')}
           {meeting.attendees.length > shown.length ? ` +${meeting.attendees.length - shown.length}` : ''}
         </div>

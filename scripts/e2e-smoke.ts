@@ -2,7 +2,8 @@
  * SIGNAL Phase 4 — scripted end-to-end smoke test (simulation mode).
  *
  * Exercises the full backend stack WITHOUT real API keys:
- *   1. Boots apps/server on a clean :8080 (fresh signal.db)
+ *   1. Boots apps/server on E2E_PORT (default 18080) against a throwaway DB in
+ *      the OS temp dir — the developer's apps/server/signal.db is never touched
  *   2. Probes REST endpoints — contacts CRUD, calls, analytics, dashboard SPA
  *   3. Opens a WebSocket, sends `start` with a prospect, then `stop`
  *   4. Verifies contact + call_session rows were written
@@ -15,18 +16,22 @@
  * Or:  tsx scripts/e2e-smoke.ts  (from repo root, with tsx installed)
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- probes untyped JSON/DB rows */
 import { spawn, ChildProcess } from 'node:child_process';
 import { setTimeout as wait } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import Database from 'better-sqlite3';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const SERVER_CWD = resolve(REPO_ROOT, 'apps/server');
-const DB_PATH = resolve(SERVER_CWD, 'signal.db');
+const TMP_DIR = mkdtempSync(join(tmpdir(), 'signal-e2e-'));
+const DB_PATH = join(TMP_DIR, 'signal.db');
 const PORT = Number(process.env.E2E_PORT ?? 18080);
 const BASE = `http://localhost:${PORT}`;
 const AUTH_TOKEN = 'signal-e2e-token';
@@ -41,44 +46,69 @@ function record(step: string, ok: boolean, detail?: string): void {
   log(`${ok ? 'OK  ' : 'FAIL'} — ${step}${detail ? `  (${detail})` : ''}`);
 }
 
-async function startServer(): Promise<void> {
-  await Bun_rm(DB_PATH);
-  await Bun_rm(`${DB_PATH}-shm`);
-  await Bun_rm(`${DB_PATH}-wal`);
+// Placeholder keys force simulation mode even when apps/server/.env holds real
+// credentials (dotenv never overrides variables that are already set), so the
+// smoke test can't call paid APIs or post to Slack/HubSpot.
+const SIMULATION_ENV: Record<string, string> = {
+  AI_PROVIDER: 'claude',
+  ANTHROPIC_API_KEY: 'sk-ant-your-key-here',
+  OPENROUTER_API_KEY: 'sk-or-your-key-here',
+  DEEPGRAM_API_KEY: 'your-deepgram-key-here',
+  OCTAMEM_API_KEY: 'your-octamem-key-here',
+  HUME_API_KEY: 'your-hume-key-here',
+  VOYAGE_API_KEY: 'your-voyage-key-here',
+  SLACK_WEBHOOK_URL: 'your-slack-webhook-url-here',
+  HUBSPOT_API_KEY: 'your-hubspot-key-here',
+  GMAIL_CLIENT_ID: '', GMAIL_CLIENT_SECRET: '', GMAIL_REFRESH_TOKEN: '',
+  GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '', GOOGLE_REFRESH_TOKEN_CALENDAR: '',
+  OUTLOOK_CLIENT_ID: '', OUTLOOK_CLIENT_SECRET: '', OUTLOOK_REFRESH_TOKEN: '',
+};
 
-  log('starting server…');
+async function startServer(): Promise<void> {
+  log(`starting server (db: ${DB_PATH})…`);
   // Use the node_modules tsx binary directly to avoid PATH lookups for pnpm
   const tsxBin = resolve(SERVER_CWD, 'node_modules/.bin/tsx');
   serverProc = spawn(tsxBin, ['src/index.ts'], {
     cwd: SERVER_CWD,
-    env: { ...process.env, PORT: String(PORT), DATABASE_URL: './signal.db', SIGNAL_AUTH_TOKEN: AUTH_TOKEN },
+    env: {
+      ...process.env,
+      ...SIMULATION_ENV,
+      PORT: String(PORT),
+      DATABASE_URL: DB_PATH,
+      SIGNAL_AUTH_TOKEN: AUTH_TOKEN,
+      SIGNAL_AUTH_DISABLED: 'false',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  let ready = false;
-  serverProc.stdout?.on('data', (chunk) => {
-    const s = chunk.toString();
-    if (s.includes('Server listening at')) ready = true;
-    process.stdout.write(`  [server] ${s}`);
-  });
+  serverProc.stdout?.on('data', (chunk) => process.stdout.write(`  [server] ${chunk}`));
   serverProc.stderr?.on('data', (chunk) => process.stderr.write(`  [server:err] ${chunk}`));
 
-  for (let i = 0; i < 40; i++) {
-    if (ready) return;
+  // Poll /health rather than scraping log output (format depends on pino-pretty).
+  for (let i = 0; i < 80; i++) {
+    if (serverProc.exitCode !== null) {
+      throw new Error(`Server exited early with code ${serverProc.exitCode}`);
+    }
+    try {
+      const res = await fetch(`${BASE}/health`);
+      if (res.ok) return;
+    } catch {}
     await wait(250);
   }
-  throw new Error('Server did not start within 10s');
+  throw new Error('Server did not start within 20s');
 }
 
 async function stopServer(): Promise<void> {
-  if (!serverProc) return;
-  serverProc.kill('SIGTERM');
-  await wait(500);
-  if (!serverProc.killed) serverProc.kill('SIGKILL');
-}
-
-async function Bun_rm(path: string): Promise<void> {
-  try { await import('node:fs/promises').then(fs => fs.rm(path, { force: true })); } catch {}
+  const proc = serverProc;
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
+  const exited = new Promise<void>(res => proc.once('exit', () => res()));
+  proc.kill('SIGTERM');
+  // `proc.killed` only means a signal was sent, so wait for the actual exit.
+  const timedOut = await Promise.race([exited.then(() => false), wait(3000).then(() => true)]);
+  if (timedOut) {
+    proc.kill('SIGKILL');
+    await exited;
+  }
 }
 
 async function http<T = unknown>(path: string, init?: RequestInit): Promise<{ status: number; body: T | string }> {
@@ -341,6 +371,7 @@ async function main(): Promise<void> {
     record('E2E harness did not throw', false, err instanceof Error ? err.message : String(err));
   } finally {
     await stopServer();
+    rmSync(TMP_DIR, { recursive: true, force: true });
   }
 
   const failed = printSummary();

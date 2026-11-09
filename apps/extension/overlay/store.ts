@@ -49,6 +49,8 @@ const DEFAULT_FRAME: SignalFrame = {
 };
 
 const MAX_CUES = 10;
+/** Bound memory on long calls — the HUD only ever renders the tail. */
+export const MAX_TRANSCRIPT_LINES = 500;
 
 export const useSignalStore = create<SignalStore>((set) => ({
   overlayState: 'IDLE',
@@ -66,7 +68,8 @@ export const useSignalStore = create<SignalStore>((set) => ({
     const isRealCue = frame.prompt.type !== 'IDLE';
     const next: Partial<SignalStore> = {
       frame,
-      prevSentiment: s.frame?.sentiment ?? null,
+      // The placeholder frame's sentiment isn't a real reading — no baseline yet.
+      prevSentiment: s.frame && s.frame !== DEFAULT_FRAME ? s.frame.sentiment : null,
       frameVersion: s.frameVersion + 1,
     };
     if (isRealCue) {
@@ -79,7 +82,7 @@ export const useSignalStore = create<SignalStore>((set) => ({
   }),
 
   appendTranscriptLine: (line) =>
-    set((s) => ({ transcript: [...s.transcript, line] })),
+    set((s) => ({ transcript: [...s.transcript, line].slice(-MAX_TRANSCRIPT_LINES) })),
   setElapsedSeconds: (elapsedSeconds) => set({ elapsedSeconds }),
   setPostCallSummary: (postCallSummary) => set({ postCallSummary }),
 

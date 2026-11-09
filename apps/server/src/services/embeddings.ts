@@ -78,9 +78,12 @@ export function packFloat32(vec: number[]): Buffer {
 
 /** Unpack a Buffer BLOB back into number[]. Copies so the result is independent. */
 export function unpackFloat32(buf: Buffer): number[] {
-  // Buffer may share an underlying ArrayBuffer with other data → align via byteOffset/length.
-  const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-  return Array.from(f32);
+  // Buffer may share an underlying ArrayBuffer at an arbitrary byteOffset, and a
+  // Float32Array view requires 4-byte alignment — read element-wise instead.
+  const n = Math.floor(buf.byteLength / 4);
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) out[i] = buf.readFloatLE(i * 4);
+  return out;
 }
 
 // ── Chunking ──────────────────────────────────────────────────────────
