@@ -1,5 +1,5 @@
 import type { CallType, PostCallSummary, TranscriptLine } from '@signal/types';
-import type { AIProvider } from './ai.js';
+import { extractJsonText, type AIProvider } from './ai.js';
 
 export interface GenerateSummaryOpts {
   ai: AIProvider;
@@ -30,7 +30,7 @@ function buildUserPrompt(callType: CallType, transcript: TranscriptLine[]): stri
 
 function parseSummary(text: string): PostCallSummary | null {
   try {
-    const obj = JSON.parse(text) as Partial<PostCallSummary>;
+    const obj = JSON.parse(extractJsonText(text)) as Partial<PostCallSummary>;
     if (
       !Array.isArray(obj.winSignals) ||
       !Array.isArray(obj.objections) ||

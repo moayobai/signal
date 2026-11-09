@@ -12,13 +12,25 @@ import { embed, cosineSimilarity, unpackFloat32, isPlaceholderVoyageKey } from '
 
 export interface ApiRouteOptions { db: DB; octamemApiKey: string; voyageApiKey: string; }
 
-function safeParseArray(json: string): string[] {
-  try { return JSON.parse(json) as string[]; } catch { return []; }
+/** Parse a JSON-encoded string[] column; tolerates corrupt / non-array values. */
+function safeParseArray(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function safeParseJson<T>(json: string | null): T | null {
   if (!json) return null;
   try { return JSON.parse(json) as T; } catch { return null; }
+}
+
+function parseAttendees(json: string): CalendarAttendee[] {
+  const parsed = safeParseJson<CalendarAttendee[]>(json);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 // ── Request body schemas ─────────────────────────────────────────────
@@ -107,14 +119,17 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
 
   app.get('/api/calls/:id/transcript', async (req) => {
     const id = (req.params as { id: string }).id;
-    return db.select().from(transcriptLines).where(eq(transcriptLines.sessionId, id)).all();
+    return db.select().from(transcriptLines)
+      .where(eq(transcriptLines.sessionId, id))
+      .orderBy(asc(transcriptLines.timestamp), asc(transcriptLines.id))
+      .all();
   });
 
   app.get('/api/calls/:id/frames', async (req) => {
     const id = (req.params as { id: string }).id;
     const rows = db.select().from(signalFrames)
       .where(eq(signalFrames.sessionId, id))
-      .orderBy(signalFrames.createdAt)
+      .orderBy(asc(signalFrames.createdAt), asc(signalFrames.id))
       .all();
     // Add `timestamp` alias and relative offset from call start for UI
     const call = db.select().from(callSessions).where(eq(callSessions.id, id)).get();
@@ -249,7 +264,7 @@ export function registerApiRoutes(app: FastifyInstance, opts: ApiRouteOptions): 
       title: row.title,
       startTime: row.startTime,
       endTime: row.endTime,
-      attendees: safeParseJson<CalendarAttendee[]>(row.attendees) ?? [],
+      attendees: parseAttendees(row.attendees),
       meetingLink: row.meetingLink,
       description: row.description,
       detectedAt: row.detectedAt,

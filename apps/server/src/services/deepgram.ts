@@ -21,6 +21,18 @@ export interface DeepgramHandle {
   finish: () => void;
 }
 
+/** Deepgram closes idle streams after ~10s without audio; ping well within that. */
+const KEEPALIVE_INTERVAL_MS = 8_000;
+
+/**
+ * Copy exactly the bytes a Buffer views into a standalone ArrayBuffer.
+ * `buf.buffer` alone is wrong: small Node Buffers are slices of a shared pool,
+ * so the backing ArrayBuffer contains unrelated bytes before/after the chunk.
+ */
+export function toArrayBuffer(buf: Buffer): ArrayBuffer {
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+}
+
 export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHandle {
   const { apiKey, model = 'nova-3', onTranscript, onError } = options;
 
@@ -56,23 +68,48 @@ export function createDeepgramClient(options: DeepgramClientOptions): DeepgramHa
     onTranscript(line);
   });
 
+  // Once closed (or finished), stop forwarding audio — the SDK would otherwise
+  // queue every chunk in an unbounded in-memory buffer that is never flushed.
+  let closed = false;
+  let keepAliveTimer: NodeJS.Timeout | null = null;
+  const stopKeepAlive = (): void => {
+    if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
+  };
+
+  connection.on(LiveTranscriptionEvents.Open, () => {
+    if (closed) return;
+    keepAliveTimer = setInterval(() => {
+      try {
+        connection.keepAlive();
+      } catch (err) {
+        console.error('[SIGNAL] Deepgram keepAlive error:', err);
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  });
+
   connection.on(LiveTranscriptionEvents.Error, onError);
 
   connection.on(LiveTranscriptionEvents.Close, () => {
+    closed = true;
+    stopKeepAlive();
     console.log('[SIGNAL] Deepgram connection closed');
   });
 
   return {
     send: (chunk: Buffer) => {
+      if (closed || chunk.byteLength === 0) return;
       try {
-        connection.send(chunk.buffer as ArrayBufferLike);
+        connection.send(toArrayBuffer(chunk));
       } catch (err) {
         console.error('[SIGNAL] Deepgram send error:', err);
       }
     },
     finish: () => {
+      if (closed) return;
+      closed = true;
+      stopKeepAlive();
       try {
-        connection.finish();
+        connection.requestClose();
       } catch {
         // already closed
       }

@@ -10,6 +10,8 @@ export interface SecurityOptions {
 }
 
 const AUTH_COOKIE = 'signal_auth';
+const DEFAULT_RATE_LIMIT_MAX = 120;
+const DEFAULT_RATE_LIMIT_WINDOW = '1 minute';
 
 function parseCookie(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -19,7 +21,13 @@ function parseCookie(header: string | undefined): Record<string, string> {
     if (idx === -1) continue;
     const key = part.slice(0, idx).trim();
     const value = part.slice(idx + 1).trim();
-    if (key) out[key] = decodeURIComponent(value);
+    if (!key) continue;
+    try {
+      out[key] = decodeURIComponent(value);
+    } catch {
+      // Malformed percent-encoding in an unrelated cookie must not 500 the request.
+      out[key] = value;
+    }
   }
   return out;
 }
@@ -48,10 +56,17 @@ function isPublicPath(url: string): boolean {
 }
 
 export async function registerSecurity(app: FastifyInstance, opts: SecurityOptions): Promise<void> {
-  await app.register(rateLimit, {
-    max: opts.rateLimitMax ?? 120,
-    timeWindow: opts.rateLimitWindow ?? '1 minute',
-  });
+  // Env-derived values can be NaN / 0 / blank (e.g. SIGNAL_RATE_LIMIT_MAX=abc);
+  // fall back to defaults rather than silently disabling or breaking limiting.
+  const max = opts.rateLimitMax !== undefined && Number.isFinite(opts.rateLimitMax) && opts.rateLimitMax > 0
+    ? Math.floor(opts.rateLimitMax)
+    : DEFAULT_RATE_LIMIT_MAX;
+  const timeWindow = typeof opts.rateLimitWindow === 'string'
+    ? (opts.rateLimitWindow.trim() || DEFAULT_RATE_LIMIT_WINDOW)
+    : (opts.rateLimitWindow !== undefined && Number.isFinite(opts.rateLimitWindow) && opts.rateLimitWindow > 0
+      ? opts.rateLimitWindow
+      : DEFAULT_RATE_LIMIT_WINDOW);
+  await app.register(rateLimit, { max, timeWindow });
 
   if (opts.authDisabled) {
     app.log.warn('[SIGNAL] HTTP auth disabled by SIGNAL_AUTH_DISABLED=true');
@@ -73,9 +88,13 @@ export async function registerSecurity(app: FastifyInstance, opts: SecurityOptio
 
     const queryToken = (req.query as { token?: unknown } | undefined)?.token;
     if (typeof queryToken === 'string' && safeTokenEqual(queryToken, authToken)) {
+      // Mark Secure when served over HTTPS (directly or behind a TLS-terminating proxy).
+      const forwardedProto = req.headers['x-forwarded-proto'];
+      const isHttps = req.protocol === 'https' ||
+        (typeof forwardedProto === 'string' && forwardedProto.split(',')[0].trim() === 'https');
       reply.header(
         'set-cookie',
-        `${AUTH_COOKIE}=${encodeURIComponent(authToken)}; HttpOnly; SameSite=Lax; Path=/`,
+        `${AUTH_COOKIE}=${encodeURIComponent(authToken)}; HttpOnly; SameSite=Lax; Path=/${isHttps ? '; Secure' : ''}`,
       );
     }
   });

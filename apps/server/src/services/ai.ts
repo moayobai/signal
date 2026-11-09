@@ -12,6 +12,21 @@ export interface AIProvider {
   complete(opts: AICompleteOpts): Promise<string | null>;
 }
 
+/**
+ * Models frequently wrap JSON answers in ```json fences (or add a sentence of
+ * prose) despite instructions. Return the bare JSON payload so callers can
+ * JSON.parse it; returns the trimmed input unchanged when no fence is present.
+ */
+export function extractJsonText(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return trimmed;
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  return start !== -1 && end > start ? trimmed.slice(start, end + 1) : trimmed;
+}
+
 const PLACEHOLDER_PREFIXES = ['sk-ant-your-key', 'sk-or-your-key', 'your-'];
 function isPlaceholder(key: string): boolean {
   if (!key) return true;
