@@ -1,8 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { userFacingLabel } from '@signal/types';
-import { api, type CallScorecard } from '../lib/api';
+import { api, errorMessage, type CallScorecard } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { CheckIcon, WarnIcon, TargetIcon, CopyIcon, SparkIcon, PencilIcon } from '../components/icons';
 
@@ -27,11 +27,11 @@ export default function CallDetail() {
   const summaryQ    = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id), retry: false });
   const contactQ    = useQuery({
     queryKey: ['contact', callQ.data?.contactId],
-    queryFn: () => api.contact(callQ.data!.contactId!),
+    queryFn: () => api.contact(callQ.data?.contactId ?? ''),
     enabled: !!callQ.data?.contactId,
     retry: false,
   });
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [expandedFrames, setExpandedFrames] = useState<Set<number>>(new Set());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -39,6 +39,12 @@ export default function CallDetail() {
   useEffect(() => {
     if (summaryQ.data) setDraft(summaryQ.data.followUpDraft);
   }, [summaryQ.data]);
+
+  useEffect(() => {
+    if (copyState === 'idle') return;
+    const t = setTimeout(() => setCopyState('idle'), 1500);
+    return () => clearTimeout(t);
+  }, [copyState]);
 
   function toggleFrame(fid: number) {
     setExpandedFrames(prev => {
@@ -56,6 +62,15 @@ export default function CallDetail() {
     return `${mm}:${ss}`;
   }
 
+  if (callQ.isError) {
+    return (
+      <div className="empty glass" role="alert">
+        <p>{errorMessage(callQ.error, 'Failed to load call')}</p>
+        <Link to="/" className="btn">Back to overview</Link>
+      </div>
+    );
+  }
+
   if (!callQ.data) {
     return (
       <div>
@@ -67,10 +82,15 @@ export default function CallDetail() {
   const call = callQ.data;
   const prospectLabel = contactQ.data?.name ?? 'Prospect';
 
-  function copyFollowUp() {
-    navigator.clipboard.writeText(draft);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function copyFollowUp() {
+    try {
+      // navigator.clipboard is undefined outside secure contexts (plain http).
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(draft);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
   }
 
   function speakerLabel(speaker: string): string {
@@ -147,7 +167,7 @@ export default function CallDetail() {
                   {editing ? 'Done' : 'Edit'}
                 </button>
                 <button className="btn" onClick={copyFollowUp}>
-                  <CopyIcon size={13} /> {copied ? 'Copied' : 'Copy'}
+                  <CopyIcon size={13} /> {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy'}
                 </button>
               </div>
             </div>
@@ -333,7 +353,7 @@ function ScorecardSection({ scorecard }: { scorecard: CallScorecard }) {
         <div
           style={{
             marginLeft: 'auto',
-            fontFamily: 'var(--font-serif, Fraunces, Georgia, serif)',
+            fontFamily: 'var(--font-display)',
             fontStyle: 'italic',
             fontSize: 44,
             lineHeight: 1,
