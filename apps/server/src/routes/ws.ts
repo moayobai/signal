@@ -22,6 +22,27 @@ const MIN_NEW_LINES = 2;
 const MAX_TRANSCRIPT_LINES = 5_000;
 
 type CallState = 'IDLE' | 'STARTING' | 'ACTIVE' | 'STOPPING' | 'STOPPED';
+type StartMessage = Extract<ClientMessage, { type: 'start' }>;
+
+const PLATFORMS = new Set(['meet', 'zoom', 'teams']);
+const CALL_TYPES = new Set(['investor', 'enterprise', 'bd', 'customer']);
+const MAX_FIELD_LEN = 500;
+
+function optionalString(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.length <= MAX_FIELD_LEN);
+}
+
+/** Validate an untrusted `start` payload before it touches the DB. */
+export function isValidStartMessage(msg: Record<string, unknown>): msg is StartMessage {
+  const p = msg.prospect as Record<string, unknown> | null | undefined;
+  return (
+    typeof msg.platform === 'string' && PLATFORMS.has(msg.platform) &&
+    typeof msg.callType === 'string' && CALL_TYPES.has(msg.callType) &&
+    !!p && typeof p === 'object' &&
+    typeof p.name === 'string' && p.name.trim().length > 0 && p.name.length <= MAX_FIELD_LEN &&
+    optionalString(p.company) && optionalString(p.email) && optionalString(p.linkedinUrl)
+  );
+}
 
 export interface WsRouteOptions {
   db: DB;
@@ -103,7 +124,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       onError: (err) => console.error('[SIGNAL] Hume error:', err),
     });
 
-    async function onStart(msg: Extract<ClientMessage, { type: 'start' }>): Promise<void> {
+    async function onStart(msg: StartMessage): Promise<void> {
       if (callState !== 'IDLE') {
         console.warn('[SIGNAL] onStart called in state', callState, '— ignoring');
         return;
@@ -111,7 +132,13 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       callState = 'STARTING';
       platform = msg.platform;
       callType = msg.callType;
-      prospect = msg.prospect;
+      // Normalise null → undefined so company lookups / inserts behave consistently.
+      prospect = {
+        name: msg.prospect.name.trim(),
+        company: msg.prospect.company ?? undefined,
+        email: msg.prospect.email ?? undefined,
+        linkedinUrl: msg.prospect.linkedinUrl ?? undefined,
+      };
       startedAt = Date.now();
       session = new CallSession(platform, callType);
 
@@ -130,6 +157,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         previousOctamemId: previousOctamemId ?? undefined,
       });
 
+      // A stop/close may have arrived while we awaited OctaMem. Going ACTIVE now
+      // would start a nudge timer that nothing ever clears.
+      if (callState !== 'STARTING') return;
+
       systemPrompt = buildSystemPrompt(callType, octamemContext);
       callState = 'ACTIVE';
       send({ type: 'state', overlayState: 'LIVE' });
@@ -138,10 +169,15 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       let nudgeInFlight = false;
       claudeTimer = setInterval(async () => {
         if (!session || callState !== 'ACTIVE' || nudgeInFlight) return;
+        // Silence must be checked before the new-lines gate: during silence no
+        // new lines arrive, so checking afterwards could never fire.
+        if (session.isSilent()) {
+          send({ type: 'state', overlayState: 'DANGER' });
+          return;
+        }
         if (session.newLinesSinceLastCall < MIN_NEW_LINES) return;
         const window = session.getWindow();
         session.resetNewLines();
-        if (session.isSilent()) send({ type: 'state', overlayState: 'DANGER' });
         nudgeInFlight = true;
         const frame = await runLiveNudge({
           ai: opts.ai,
@@ -150,7 +186,8 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
           userPrompt: buildUserPrompt(window),
         }).catch(err => { console.error('[SIGNAL] runLiveNudge failed:', err); return null; })
           .finally(() => { nudgeInFlight = false; });
-        if (frame) {
+        // The call may have stopped while the model was thinking.
+        if (frame && callState === 'ACTIVE') {
           // Attach latest Hume face signals if available
           const enrichedFrame: SignalFrame = latestFaceSignals
             ? { ...frame, faceSignals: latestFaceSignals }
@@ -341,25 +378,54 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       callState = 'STOPPED';
     }
 
-    socket.on('message', (rawData) => {
-      const data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData as ArrayBuffer);
-      try {
-        const msg = JSON.parse(data.toString()) as ClientMessage;
-        if (msg.type === 'start') {
-          onStart(msg).catch(err => {
-            console.error('[SIGNAL] onStart failed:', err);
-            send({ type: 'error', message: 'Failed to start session' });
-          });
-          return;
-        }
-        if (msg.type === 'stop') {
-          onStop().catch(err => console.error('[SIGNAL] onStop failed:', err));
-          return;
-        }
-        if (msg.type === 'video_frame') { hume.sendFrame(msg.data); return; }
-      } catch {
-        // Binary = audio chunk → forward to Deepgram
+    socket.on('message', (rawData, isBinary) => {
+      const data = Buffer.isBuffer(rawData)
+        ? rawData
+        : Array.isArray(rawData) ? Buffer.concat(rawData) : Buffer.from(rawData);
+
+      // Binary frames are always audio → forward to Deepgram. Control messages
+      // are text frames; never forward a malformed control message as audio.
+      if (isBinary) {
         dg.send(data);
+        return;
+      }
+
+      let msg: Record<string, unknown>;
+      try {
+        const parsed: unknown = JSON.parse(data.toString());
+        if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+        msg = parsed as Record<string, unknown>;
+      } catch {
+        send({ type: 'error', message: 'Invalid message' });
+        return;
+      }
+
+      if (msg.type === 'start') {
+        if (!isValidStartMessage(msg)) {
+          send({ type: 'error', message: 'Invalid start message' });
+          return;
+        }
+        onStart(msg).catch(err => {
+          console.error('[SIGNAL] onStart failed:', err);
+          // Only the synchronous DB steps can throw, and the call_sessions insert
+          // is the last of them, so no row exists — allow the client to retry.
+          if (callState === 'STARTING') {
+            callState = 'IDLE';
+            session = null;
+            contactId = null;
+            prospect = null;
+          }
+          send({ type: 'error', message: 'Failed to start session' });
+        });
+        return;
+      }
+      if (msg.type === 'stop') {
+        onStop().catch(err => console.error('[SIGNAL] onStop failed:', err));
+        return;
+      }
+      if (msg.type === 'video_frame') {
+        if (typeof msg.data === 'string') hume.sendFrame(msg.data);
+        return;
       }
     });
 

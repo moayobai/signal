@@ -1,5 +1,5 @@
 import type { CallFramework, CallScorecard, CallType, TranscriptLine } from '@signal/types';
-import type { AIProvider } from './ai.js';
+import { extractJsonText, type AIProvider } from './ai.js';
 
 export interface GenerateScorecardOpts {
   ai: AIProvider;
@@ -93,7 +93,7 @@ interface ParsedScorecardShape {
 
 function parseScorecard(text: string, framework: CallFramework): ParsedScorecardShape | null {
   try {
-    const obj = JSON.parse(text) as Partial<ParsedScorecardShape>;
+    const obj = JSON.parse(extractJsonText(text)) as Partial<ParsedScorecardShape>;
     if (
       obj.framework !== framework ||
       !Array.isArray(obj.dimensions) ||

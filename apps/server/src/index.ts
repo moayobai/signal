@@ -41,8 +41,11 @@ const SIGNAL_AUTH_DISABLED = process.env.SIGNAL_AUTH_DISABLED === 'true';
 const SIGNAL_RATE_LIMIT_MAX = Number(process.env.SIGNAL_RATE_LIMIT_MAX ?? 120);
 const SIGNAL_RATE_LIMIT_WINDOW = process.env.SIGNAL_RATE_LIMIT_WINDOW ?? '1 minute';
 
+// pino-pretty is a devDependency — only use it outside production.
 const app = Fastify({
-  logger: { transport: { target: 'pino-pretty', options: { colorize: true } } },
+  logger: process.env.NODE_ENV === 'production'
+    ? true
+    : { transport: { target: 'pino-pretty', options: { colorize: true } } },
 });
 
 const db = initDb(DATABASE_URL);
@@ -94,7 +97,10 @@ registerApiRoutes(app, { db, octamemApiKey: OCTAMEM_API_KEY, voyageApiKey: VOYAG
 
 // Graceful shutdown: drain in-flight WebSocket sessions before exiting.
 // Fly.io / systemd / Docker all send SIGTERM before SIGKILL.
+let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
   app.log.info(`[SIGNAL] ${signal} received — draining connections`);
   try {
     await app.close();

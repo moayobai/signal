@@ -1,9 +1,9 @@
 import type { SignalFrame } from '@signal/types';
-import type { AIProvider } from './ai.js';
+import { extractJsonText, type AIProvider } from './ai.js';
 
 export function parseSignalFrame(text: string): SignalFrame | null {
   try {
-    const obj = JSON.parse(text) as Partial<SignalFrame>;
+    const obj = JSON.parse(extractJsonText(text)) as Partial<SignalFrame>;
     if (
       !obj.prompt?.type ||
       !obj.prompt?.text ||

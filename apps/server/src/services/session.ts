@@ -1,6 +1,9 @@
 import type { TranscriptLine, CallType } from '@signal/types';
 
-const PRICING_KEYWORDS = ['price', 'cost', 'expensive', 'budget', 'afford', 'pricing', 'roi', 'investment'];
+const PRICING_KEYWORDS = ['price', 'cost', 'costly', 'expensive', 'budget', 'afford', 'affordable', 'pricing', 'roi', 'investment'];
+// Whole-word match (optionally plural) so e.g. "heroic"/"android" don't trip
+// "roi" and "costume" doesn't trip "cost".
+const PRICING_RE = new RegExp(`\\b(?:${PRICING_KEYWORDS.join('|')})s?\\b`, 'i');
 const SILENCE_THRESHOLD_MS = 30_000;
 const WINDOW_DURATION_MS = 90_000;
 
@@ -46,12 +49,13 @@ export class CallSession {
   }
 
   setCompetitors(names: string[]): void {
-    this.competitors = names.map(n => n.toLowerCase());
+    // Drop blanks: ''.includes check would flag every line as a competitor mention.
+    this.competitors = names.map(n => n.trim().toLowerCase()).filter(n => n.length > 0);
   }
 
   detectKeyword(text: string): 'pricing' | 'competitor' | null {
     const lower = text.toLowerCase();
-    if (PRICING_KEYWORDS.some(k => lower.includes(k))) return 'pricing';
+    if (PRICING_RE.test(lower)) return 'pricing';
     if (this.competitors.some(c => lower.includes(c))) return 'competitor';
     return null;
   }

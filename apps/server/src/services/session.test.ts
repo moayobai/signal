@@ -64,3 +64,26 @@ describe('CallSession — danger detection', () => {
     expect(session.detectKeyword('tell me more about your platform')).toBeNull();
   });
 });
+
+describe('CallSession — keyword false positives (regression)', () => {
+  it('does not flag substrings of unrelated words as pricing', () => {
+    const session = new CallSession('meet', 'enterprise');
+    expect(session.detectKeyword('that was a heroic effort')).toBeNull();
+    expect(session.detectKeyword('we ship an android app')).toBeNull();
+    expect(session.detectKeyword('nice costume')).toBeNull();
+  });
+
+  it('still flags whole-word and plural pricing keywords', () => {
+    const session = new CallSession('meet', 'enterprise');
+    expect(session.detectKeyword('What is the ROI?')).toBe('pricing');
+    expect(session.detectKeyword('our costs are high')).toBe('pricing');
+    expect(session.detectKeyword('is it affordable')).toBe('pricing');
+  });
+
+  it('ignores blank competitor names instead of matching every line', () => {
+    const session = new CallSession('meet', 'enterprise');
+    session.setCompetitors(['', '  ', 'Rival']);
+    expect(session.detectKeyword('tell me about your platform')).toBeNull();
+    expect(session.detectKeyword('we use rival today')).toBe('competitor');
+  });
+});

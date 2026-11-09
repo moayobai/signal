@@ -40,3 +40,14 @@ describe('runLiveNudge', () => {
     expect(result?.prompt.type).toBe('ASK');
   });
 });
+
+describe('parseSignalFrame — fenced model output (regression)', () => {
+  it('parses JSON wrapped in a ```json code fence', () => {
+    const result = parseSignalFrame('```json\n' + JSON.stringify(VALID_FRAME) + '\n```');
+    expect(result?.prompt.type).toBe('ASK');
+  });
+  it('parses JSON preceded by a sentence of prose', () => {
+    const result = parseSignalFrame('Here is the frame: ' + JSON.stringify(VALID_FRAME));
+    expect(result?.sentiment).toBe(72);
+  });
+});

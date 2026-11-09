@@ -30,6 +30,7 @@ vi.mock('../services/summary.js', () => ({
 }));
 
 import { registerWsRoute } from './ws.js';
+import { queryProspectContext } from '../services/octamem.js';
 import { initDb, callSessions, contacts, transcriptLines, callSummaries } from '../services/db.js';
 import { NoOpProvider } from '../services/ai.js';
 import { registerSecurity } from '../services/security.js';
@@ -164,5 +165,86 @@ describe('WebSocket route', () => {
     app = built.app;
     const res = await app.inject({ method: 'GET', url: '/ws' });
     expect(res.statusCode).toBe(401);
+  });
+
+  describe('regressions', () => {
+    function collect(ws: WebSocket): Array<Record<string, unknown>> {
+      const msgs: Array<Record<string, unknown>> = [];
+      ws.on('message', (d) => msgs.push(JSON.parse(d.toString())));
+      return msgs;
+    }
+
+    it('does not go LIVE when stop arrives while start is still awaiting OctaMem', async () => {
+      let resolveQuery: (v: string | null) => void = () => {};
+      vi.mocked(queryProspectContext).mockImplementationOnce(
+        () => new Promise((r) => { resolveQuery = r; }),
+      );
+      const ws = await connectAndDrainConnected(address);
+      const msgs = collect(ws);
+      ws.send(JSON.stringify({
+        type: 'start', platform: 'meet', callType: 'enterprise',
+        prospect: { name: 'James', company: 'Acme' },
+      }));
+      await new Promise(r => setTimeout(r, 50));
+      ws.send(JSON.stringify({ type: 'stop' }));
+      await new Promise(r => setTimeout(r, 50));
+      resolveQuery(null);
+      await new Promise(r => setTimeout(r, 50));
+      expect(msgs).not.toContainEqual({ type: 'state', overlayState: 'LIVE' });
+      // Audio after stop must not be persisted as transcript.
+      ws.send(Buffer.from([0x01]));
+      await new Promise(r => setTimeout(r, 50));
+      expect(built.db.select().from(transcriptLines).all()).toHaveLength(0);
+      ws.close();
+    });
+
+    it('rejects a malformed start message without touching the DB', async () => {
+      const ws = await connectAndDrainConnected(address);
+      const msgs = collect(ws);
+      ws.send(JSON.stringify({ type: 'start', platform: 'meet', callType: 'enterprise' }));
+      await new Promise(r => setTimeout(r, 50));
+      expect(msgs).toContainEqual({ type: 'error', message: 'Invalid start message' });
+      expect(built.db.select().from(contacts).all()).toHaveLength(0);
+      expect(built.db.select().from(callSessions).all()).toHaveLength(0);
+
+      // The session is still startable afterwards.
+      ws.send(JSON.stringify({
+        type: 'start', platform: 'zoom', callType: 'bd', prospect: { name: 'Ana', company: null },
+      }));
+      await new Promise(r => setTimeout(r, 50));
+      expect(msgs).toContainEqual({ type: 'state', overlayState: 'LIVE' });
+      expect(built.db.select().from(contacts).all()[0].company).toBeNull();
+      ws.close();
+    });
+
+    it('flags DANGER after 30s of silence even though no new lines arrive', async () => {
+      const ws = await connectAndDrainConnected(address);
+      const msgs = collect(ws);
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        ws.send(JSON.stringify({
+          type: 'start', platform: 'meet', callType: 'enterprise', prospect: { name: 'James' },
+        }));
+        await vi.waitFor(() => expect(msgs).toContainEqual({ type: 'state', overlayState: 'LIVE' }));
+        ws.send(Buffer.from([0x01])); // mock Deepgram emits one transcript line
+        await vi.waitFor(() => expect(msgs.some(m => m.type === 'transcript')).toBe(true));
+        vi.advanceTimersByTime(36_000);
+        await vi.waitFor(() => expect(msgs).toContainEqual({ type: 'state', overlayState: 'DANGER' }));
+      } finally {
+        vi.useRealTimers();
+        ws.close();
+      }
+    });
+
+    it('does not forward malformed text frames to Deepgram as audio', async () => {
+      const ws = await connectAndDrainConnected(address);
+      const msgs = collect(ws);
+      ws.send('this is not json');
+      ws.send('null');
+      await new Promise(r => setTimeout(r, 50));
+      expect(deepgramMock.send).not.toHaveBeenCalled();
+      expect(msgs.filter(m => m.type === 'error')).toHaveLength(2);
+      ws.close();
+    });
   });
 });
