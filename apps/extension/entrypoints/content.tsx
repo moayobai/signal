@@ -1,24 +1,22 @@
 import ReactDOM from 'react-dom/client';
 import { createShadowRootUi } from 'wxt/client';
 import { Overlay } from '../overlay/Overlay';
-import { useSignalStore } from '../overlay/store';
+import { createOverlayMessageHandler } from '../overlay/serverMessages';
+import { createProspectNotifier } from '../lib/prospectNotifier';
+import { platformFromHostname, type Platform } from '../lib/platform';
 import type { ServerMessage } from '@signal/types';
 
-const PLATFORM_SELECTORS = {
+const PLATFORM_SELECTORS: Record<Platform, string> = {
   meet:  '.zWGUib',
   zoom:  '.participants-entry__name',
   teams: '[data-tid="roster-participant"]',
-} as const;
+};
 
-function currentPlatform(): keyof typeof PLATFORM_SELECTORS | null {
-  const h = location.hostname;
-  if (h.includes('meet.google.com')) return 'meet';
-  if (h.includes('zoom.us')) return 'zoom';
-  if (h.includes('teams.microsoft.com')) return 'teams';
-  return null;
+function currentPlatform(): Platform | null {
+  return platformFromHostname(location.hostname);
 }
 
-function scrapeNames(platform: keyof typeof PLATFORM_SELECTORS): string[] {
+function scrapeNames(platform: Platform): string[] {
   const sel = PLATFORM_SELECTORS[platform];
   const nodes = document.querySelectorAll<HTMLElement>(sel);
   const names = new Set<string>();
@@ -61,37 +59,22 @@ export default defineContentScript({
     // Prospect detection via DOM scrape
     const platform = currentPlatform();
     if (platform) {
-      const notify = () => {
-        const names = scrapeNames(platform);
-        if (names.length > 0) {
-          chrome.runtime.sendMessage({ type: 'PROSPECT_DETECTED', platform, names }).catch(() => {});
-        }
-      };
-      notify();
-      const observer = new MutationObserver(() => notify());
+      const notifier = createProspectNotifier(
+        () => scrapeNames(platform),
+        (names) => { chrome.runtime.sendMessage({ type: 'PROSPECT_DETECTED', platform, names }).catch(() => {}); },
+      );
+      notifier.flush();
+      const observer = new MutationObserver(() => notifier.schedule());
       observer.observe(document.body, { childList: true, subtree: true });
-      ctx.onInvalidated(() => observer.disconnect());
+      ctx.onInvalidated(() => { observer.disconnect(); notifier.dispose(); });
     }
 
-    // START_CAPTURE fires only after popup sends "pending" prospect (handled via background).
-    // Legacy auto-start kept as a dev fallback — background ignores it if prospect unavailable.
-    chrome.runtime.sendMessage({ type: 'CONTENT_READY', platform }).catch(() => {});
-
-    chrome.runtime.onMessage.addListener((msg: ServerMessage) => {
-      const store = useSignalStore.getState();
-      switch (msg.type) {
-        case 'frame':      store.setFrame(msg.frame); break;
-        case 'transcript': store.appendTranscriptLine(msg.line); break;
-        case 'state':      store.setOverlayState(msg.overlayState); break;
-        case 'connected':  store.setOverlayState('LIVE'); break;
-        case 'summary':
-          chrome.storage.session.set({ latestSummary: msg.summary, popupView: 'post' });
-          store.setOverlayState('POSTCALL');
-          break;
-        case 'error':
-          console.error('[SIGNAL] Server error:', msg.message);
-          break;
-      }
+    const handler = createOverlayMessageHandler();
+    const onMessage = (msg: ServerMessage) => handler.handle(msg);
+    chrome.runtime.onMessage.addListener(onMessage);
+    ctx.onInvalidated(() => {
+      chrome.runtime.onMessage.removeListener(onMessage);
+      handler.dispose();
     });
   },
 });
