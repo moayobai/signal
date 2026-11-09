@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import Home from './pages/Home';
 import Contacts from './pages/Contacts';
 import ContactDetail from './pages/ContactDetail';
@@ -9,6 +9,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { LogoMark } from './components/Logo';
 
 export default function App() {
+  const location = useLocation();
   return (
     <div className="app">
       <aside className="sidebar">
@@ -40,13 +41,14 @@ export default function App() {
           </div>
           <div className="row">
             <span>Build</span>
-            <span>{new Date().toISOString().slice(0, 10)}</span>
+            <span>{__BUILD_DATE__}</span>
           </div>
         </div>
       </aside>
 
       <main className="content">
-        <ErrorBoundary>
+        {/* Keyed by path so a crash on one page doesn't stick after navigating away. */}
+        <ErrorBoundary key={location.pathname}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/contacts" element={<Contacts />} />

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, type Contact, type CallSession } from '../lib/api';
+import { api, errorMessage, toContactPayload, type Contact, type CallSession, type ContactPayload } from '../lib/api';
 import { Modal } from '../components/Modal';
 import { SentimentRing } from '../components/SentimentRing';
 import { SearchIcon, PlusIcon, ChevronUp, ChevronDown, CloseIcon } from '../components/icons';
@@ -74,8 +74,8 @@ export default function Contacts() {
   const rows = useMemo(() => {
     if (!contactsQ.data || !callsQ.data) return [];
     let r = buildRows(contactsQ.data, callsQ.data);
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
+    if (q) {
       r = r.filter(({ contact: c }) =>
         c.name.toLowerCase().includes(q) ||
         (c.company ?? '').toLowerCase().includes(q) ||
@@ -98,12 +98,20 @@ export default function Contacts() {
   }, [contactsQ.data, callsQ.data, search, sortKey, sortDir]);
 
   const create = useMutation({
-    mutationFn: (body: Partial<Contact>) => api.createContact(body),
+    mutationFn: (body: ContactPayload) => api.createContact(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contacts'] });
       setModalOpen(false);
     },
   });
+
+  function closeModal() {
+    setModalOpen(false);
+    create.reset();
+  }
+
+  const loadError = contactsQ.error ?? callsQ.error;
+  const loading = contactsQ.isPending || callsQ.isPending;
 
   function toggleSort(k: SortKey) {
     if (k === sortKey) {
@@ -150,8 +158,14 @@ export default function Contacts() {
           <SortHead label="Signal"      active={sortKey} dir={sortDir} k="sentiment"  onClick={toggleSort} />
         </div>
 
-        {rows.length === 0 ? (
-          <div className="empty"><p>No contacts match.</p></div>
+        {loadError ? (
+          <div className="empty" role="alert"><p>{errorMessage(loadError, 'Failed to load contacts')}</p></div>
+        ) : loading ? (
+          <div className="empty"><p>Loading contacts…</p></div>
+        ) : rows.length === 0 ? (
+          <div className="empty">
+            <p>{contactsQ.data?.length ? 'No contacts match.' : 'No contacts yet.'}</p>
+          </div>
         ) : rows.map(({ contact: c, callCount, lastCalledAt, avgSentiment }) => (
           <div className="t-row" key={c.id}>
             <span className="name">
@@ -168,9 +182,10 @@ export default function Contacts() {
 
       <NewContactModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
         onSubmit={(body) => create.mutate(body)}
         pending={create.isPending}
+        error={create.isError ? errorMessage(create.error, 'Failed to create contact') : null}
       />
     </div>
   );
@@ -196,7 +211,12 @@ function SortHead({ label, k, active, dir, onClick, className }: {
     <span
       className={`${isActive ? 'sorted' : ''} ${className ?? ''}`}
       onClick={() => onClick(k)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(k); }
+      }}
       role="button"
+      tabIndex={0}
+      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}
     >
       {label}
       <span className="sort-indicator">
@@ -216,9 +236,10 @@ function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function NewContactModal({ open, onClose, onSubmit, pending }: {
+export function NewContactModal({ open, onClose, onSubmit, pending, error }: {
   open: boolean; onClose: () => void; pending: boolean;
-  onSubmit: (body: Partial<Contact>) => void;
+  onSubmit: (body: ContactPayload) => void;
+  error?: string | null;
 }) {
   const [form, setForm] = useState({
     name: '', company: '', role: '', email: '', linkedinUrl: '',
@@ -232,7 +253,7 @@ function NewContactModal({ open, onClose, onSubmit, pending }: {
     <Modal open={open} onClose={() => { reset(); onClose(); }}>
       <form
         className="dialog-pad"
-        onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}
+        onSubmit={(e) => { e.preventDefault(); onSubmit(toContactPayload(form, 'create')); }}
       >
         <div className="dialog-head">
           <h2>New contact</h2>
@@ -287,11 +308,15 @@ function NewContactModal({ open, onClose, onSubmit, pending }: {
           </div>
         </div>
 
+        {error && (
+          <p role="alert" style={{ color: 'var(--neg-strong)', fontSize: 13, margin: '12px 0 0' }}>{error}</p>
+        )}
+
         <div className="dialog-foot">
           <button type="button" className="btn btn-ghost" onClick={() => { reset(); onClose(); }}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={!form.name || pending}>
+          <button type="submit" className="btn btn-primary" disabled={!form.name.trim() || pending}>
             {pending ? 'Creating…' : 'Create contact'}
           </button>
         </div>

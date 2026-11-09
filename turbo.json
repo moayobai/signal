@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["WS_URL", "SIGNAL_AUTH_TOKEN"],
       "outputs": ["dist/**", ".output/**", "public/**", "../public/**"]
     },
     "dev": {
@@ -18,7 +19,17 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": [
+        "AI_PROVIDER",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "DEEPGRAM_API_KEY",
+        "OCTAMEM_API_KEY",
+        "DATABASE_URL",
+        "SIGNAL_AUTH_TOKEN",
+        "SIGNAL_AUTH_DISABLED"
+      ]
     },
     "lint": {}
   }

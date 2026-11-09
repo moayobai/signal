@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useMemo } from 'react';
-import { api, type CallSession } from '../lib/api';
+import { api, errorMessage, toContactPayload, type CallSession, type Contact, type ContactPayload } from '../lib/api';
 import { SentimentRing } from '../components/SentimentRing';
 import { ArrowRightIcon, SparkIcon, WarnIcon, CloseIcon } from '../components/icons';
 
@@ -39,12 +39,21 @@ export default function ContactDetail() {
   const [toast, setToast] = useState(false);
   const [filterObjection, setFilterObjection] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(false), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Objection filter is scoped to the contact being viewed.
+  useEffect(() => { setFilterObjection(null); }, [id]);
+
   const update = useMutation({
-    mutationFn: (body: Partial<typeof form>) => api.updateContact(id, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['contact', id] });
+    mutationFn: (body: ContactPayload) => api.updateContact(id, body),
+    onSuccess: (saved: Contact) => {
+      qc.setQueryData(['contact', id], saved);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
       setToast(true);
-      setTimeout(() => setToast(false), 2500);
     },
   });
 
@@ -53,6 +62,21 @@ export default function ContactDetail() {
       .sort((a, b) => b.startedAt - a.startedAt),
     [callsQ.data, id]
   );
+
+  // Summaries are only fetched once an objection filter is chosen; a call
+  // without a summary (404) simply doesn't match.
+  const summaryQs = useQueries({
+    queries: myCalls.map(c => ({
+      queryKey: ['summary', c.id],
+      queryFn: () => api.summary(c.id),
+      enabled: filterObjection != null,
+      retry: false,
+    })),
+  });
+  const filterPending = filterObjection != null && summaryQs.some(q => q.isLoading);
+  const shownCalls = filterObjection == null
+    ? myCalls
+    : myCalls.filter((_, i) => summaryQs[i]?.data?.objections.includes(filterObjection));
   const sentVals = myCalls.map(c => c.sentimentAvg).filter((s): s is number => s != null);
   const avgSent = sentVals.length ? sentVals.reduce((a, b) => a + b, 0) / sentVals.length : null;
 
@@ -60,13 +84,22 @@ export default function ContactDetail() {
   const octaQ = useQuery({
     queryKey: ['octamem', id, contactQ.data?.name, contactQ.data?.company],
     queryFn: () => api.octamemQuery({
-      name: contactQ.data!.name,
-      company: contactQ.data?.company,
+      name: contactQ.data?.name ?? '',
+      company: contactQ.data?.company ?? undefined,
     }),
     enabled: !!contactQ.data?.name,
     retry: false,
     staleTime: 30_000,
   });
+
+  if (contactQ.isError) {
+    return (
+      <div className="empty glass" role="alert">
+        <p>{errorMessage(contactQ.error, 'Failed to load contact')}</p>
+        <Link to="/contacts" className="btn">Back to contacts</Link>
+      </div>
+    );
+  }
 
   if (!contactQ.data) {
     return (
@@ -100,7 +133,7 @@ export default function ContactDetail() {
         {/* Left column: editor + calls */}
         <div>
           <form className="glass" style={{ padding: 24 }}
-            onSubmit={(e) => { e.preventDefault(); update.mutate(form); }}>
+            onSubmit={(e) => { e.preventDefault(); update.mutate(toContactPayload(form, 'update')); }}>
             <div className="field-grid">
               <div className="field">
                 <label>Company</label>
@@ -123,7 +156,12 @@ export default function ContactDetail() {
                 <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18, gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 18, gap: 10 }}>
+              {update.isError && (
+                <span role="alert" style={{ color: 'var(--neg-strong)', fontSize: 13, marginRight: 'auto' }}>
+                  {errorMessage(update.error, 'Failed to save contact')}
+                </span>
+              )}
               <button type="submit" className="btn btn-primary" disabled={update.isPending}>
                 {update.isPending ? 'Saving…' : 'Save'}
               </button>
@@ -132,7 +170,9 @@ export default function ContactDetail() {
 
           <div className="section-head" id="calls-section">
             <h2>Calls</h2>
-            <span className="meta">{myCalls.length} sessions</span>
+            <span className="meta">
+              {filterObjection ? `${shownCalls.length} of ${myCalls.length}` : myCalls.length} sessions
+            </span>
           </div>
 
           {filterObjection && (
@@ -151,9 +191,13 @@ export default function ContactDetail() {
 
           {myCalls.length === 0 ? (
             <div className="empty glass"><p>No calls with this contact yet.</p></div>
+          ) : filterPending ? (
+            <div className="empty glass"><p>Filtering calls…</p></div>
+          ) : shownCalls.length === 0 ? (
+            <div className="empty glass"><p>No calls raised this objection.</p></div>
           ) : (
             <ul className="contact-calls">
-              {myCalls.map(c => (
+              {shownCalls.map(c => (
                 <li key={c.id}>
                   <Link to={`/calls/${c.id}`} className="call-row">
                     <SentimentRing value={c.sentimentAvg} size={42} stroke={4} />
@@ -202,15 +246,15 @@ export default function ContactDetail() {
 
             {objQ.data && objQ.data.length > 0 ? (
               <div>
-                {objQ.data.slice(0, 6).map((o, i) => {
-                  const max = objQ.data![0].count;
+                {objQ.data.slice(0, 6).map((o, i, top) => {
+                  const max = top[0].count;
                   const pct = (o.count / max) * 100;
                   return (
                     <button
                       type="button"
                       className="obj-row"
                       key={i}
-                      title="Click to filter calls (coming soon)"
+                      title="Show only calls that raised this objection"
                       onClick={() => {
                         setFilterObjection(o.objection);
                         document.getElementById('calls-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
