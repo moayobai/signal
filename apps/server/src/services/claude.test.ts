@@ -40,3 +40,31 @@ describe('runLiveNudge', () => {
     expect(result?.prompt.type).toBe('ASK');
   });
 });
+
+describe('parseSignalFrame robustness', () => {
+  it('extracts JSON wrapped in markdown fences', () => {
+    const text = '```json\n' + JSON.stringify(VALID_FRAME) + '\n```';
+    expect(parseSignalFrame(text)?.sentiment).toBe(72);
+  });
+  it('extracts JSON preceded by prose', () => {
+    const text = 'Here is the frame:\n' + JSON.stringify(VALID_FRAME);
+    expect(parseSignalFrame(text)?.prompt.type).toBe('ASK');
+  });
+  it('clamps out-of-range sentiment and confidence', () => {
+    const r = parseSignalFrame(JSON.stringify({
+      ...VALID_FRAME, sentiment: 140, prompt: { ...VALID_FRAME.prompt, confidence: 3 },
+    }));
+    expect(r?.sentiment).toBe(100);
+    expect(r?.prompt.confidence).toBe(1);
+  });
+  it('accepts numeric-string sentiment', () => {
+    expect(parseSignalFrame(JSON.stringify({ ...VALID_FRAME, sentiment: '64.4' }))?.sentiment).toBe(64);
+  });
+  it('rejects non-numeric sentiment', () => {
+    expect(parseSignalFrame(JSON.stringify({ ...VALID_FRAME, sentiment: 'high' }))).toBeNull();
+  });
+  it('normalizes invalid bodyLang values to neutral defaults', () => {
+    const r = parseSignalFrame(JSON.stringify({ ...VALID_FRAME, bodyLang: { engagement: 'strong', tone: 'angry' } }));
+    expect(r?.bodyLang).toEqual({ engagement: 'strong', energy: 'neutral', tone: 'neutral' });
+  });
+});

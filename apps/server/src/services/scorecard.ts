@@ -1,5 +1,6 @@
 import type { CallFramework, CallScorecard, CallType, TranscriptLine } from '@signal/types';
 import type { AIProvider } from './ai.js';
+import { extractJsonObject } from './claude.js';
 
 export interface GenerateScorecardOpts {
   ai: AIProvider;
@@ -75,6 +76,8 @@ Return ONLY valid JSON matching this exact shape — no markdown, no prose:
 
 Rules:
 - Include EVERY dimension listed above, in the order given.
+- Score on what the PROSPECT said or confirmed. If only the rep raised a topic and the prospect did not engage, score it ≤ 4.
+- When evidence is ambiguous, pick the lower band — do not reward politeness or vague agreement.
 - justification must reference what actually happened in the call (≤ 200 chars).
 - nextSteps are imperative, concrete actions (e.g. "Confirm CFO as economic buyer in next call").
 - Do NOT include overallScore — the server computes it.`;
@@ -91,28 +94,42 @@ interface ParsedScorecardShape {
   nextSteps: string[];
 }
 
-function parseScorecard(text: string, framework: CallFramework): ParsedScorecardShape | null {
+export function parseScorecard(text: string, framework: CallFramework): ParsedScorecardShape | null {
   try {
-    const obj = JSON.parse(text) as Partial<ParsedScorecardShape>;
+    const json = extractJsonObject(text);
+    if (!json) return null;
+    const obj = JSON.parse(json) as Partial<ParsedScorecardShape>;
     if (
       obj.framework !== framework ||
       !Array.isArray(obj.dimensions) ||
       !Array.isArray(obj.nextSteps)
     ) return null;
 
-    const validDims: Array<{ key: string; label: string; score: number; justification: string }> = [];
+    const byKey = new Map<string, { key: string; label: string; score: number; justification: string }>();
     for (const d of obj.dimensions) {
       if (
         !d || typeof d !== 'object' ||
         typeof d.key !== 'string' ||
         typeof d.label !== 'string' ||
         typeof d.score !== 'number' ||
+        !Number.isFinite(d.score) ||
         typeof d.justification !== 'string'
       ) return null;
+      // Ignore hallucinated keys and duplicates — first occurrence wins.
+      if (byKey.has(d.key)) continue;
       const clamped = Math.max(0, Math.min(10, d.score));
-      validDims.push({ key: d.key, label: d.label, score: clamped, justification: d.justification });
+      byKey.set(d.key, { key: d.key, label: d.label, score: clamped, justification: d.justification });
     }
-    if (validDims.length === 0) return null;
+
+    const defs = dimsFor(framework);
+    const matched = defs.filter(def => byKey.has(def.key)).length;
+    if (matched === 0) return null;
+
+    // Emit dimensions in canonical order. A dimension the model skipped is
+    // scored 0 rather than dropped, otherwise omissions inflate overallScore.
+    const validDims = defs.map(def => byKey.get(def.key) ?? {
+      key: def.key, label: def.label, score: 0, justification: 'Not assessed — no evidence in transcript.',
+    });
 
     const nextSteps = obj.nextSteps.filter((s): s is string => typeof s === 'string');
     return { framework, dimensions: validDims, nextSteps };
@@ -121,7 +138,7 @@ function parseScorecard(text: string, framework: CallFramework): ParsedScorecard
   }
 }
 
-function computeOverall(framework: CallFramework, dims: Array<{ key: string; score: number }>): number {
+export function computeOverall(framework: CallFramework, dims: Array<{ key: string; score: number }>): number {
   const defs = dimsFor(framework);
   const weightMap = new Map(defs.map(d => [d.key, d.weight]));
   let weightedSum = 0;
