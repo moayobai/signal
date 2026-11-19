@@ -5,6 +5,7 @@ import type {
   TranscriptLine,
   PostCallSummary,
 } from '@signal/types';
+import { sanitizeSentiment, smoothSentiment } from '../lib/sentiment';
 
 interface CueHistoryEntry {
   frame: SignalFrame;
@@ -14,7 +15,15 @@ interface CueHistoryEntry {
 interface SignalStore {
   overlayState: OverlayState;
   frame: SignalFrame | null;
+  /**
+   * Smoothed (EMA) sentiment shown in the UI. Null until the server has sent
+   * a usable score — the placeholder frame's value is never displayed.
+   */
+  sentiment: number | null;
+  /** Previous smoothed sentiment; null until two real samples have arrived. */
   prevSentiment: number | null;
+  /** Recent smoothed sentiment samples, oldest first. */
+  sentimentHistory: number[];
   cueHistory: CueHistoryEntry[];
   /** Monotonically increasing; used to trigger nudge-card re-animation. */
   frameVersion: number;
@@ -49,11 +58,14 @@ const DEFAULT_FRAME: SignalFrame = {
 };
 
 const MAX_CUES = 10;
+export const MAX_SENTIMENT_HISTORY = 60;
 
 export const useSignalStore = create<SignalStore>((set) => ({
   overlayState: 'IDLE',
   frame: DEFAULT_FRAME,
+  sentiment: null,
   prevSentiment: null,
+  sentimentHistory: [],
   cueHistory: [],
   frameVersion: 0,
   transcript: [],
@@ -66,9 +78,17 @@ export const useSignalStore = create<SignalStore>((set) => ({
     const isRealCue = frame.prompt.type !== 'IDLE';
     const next: Partial<SignalStore> = {
       frame,
-      prevSentiment: s.frame?.sentiment ?? null,
       frameVersion: s.frameVersion + 1,
     };
+    // Frames with a missing/invalid score keep the last known sentiment
+    // rather than snapping the ring to 0.
+    const raw = sanitizeSentiment(frame.sentiment);
+    if (raw != null) {
+      const smoothed = smoothSentiment(s.sentiment, raw);
+      next.sentiment = smoothed;
+      next.prevSentiment = s.sentiment;
+      next.sentimentHistory = [...s.sentimentHistory, smoothed].slice(-MAX_SENTIMENT_HISTORY);
+    }
     if (isRealCue) {
       next.cueHistory = [
         ...s.cueHistory,
@@ -87,7 +107,9 @@ export const useSignalStore = create<SignalStore>((set) => ({
     set({
       overlayState: 'IDLE',
       frame: DEFAULT_FRAME,
+      sentiment: null,
       prevSentiment: null,
+      sentimentHistory: [],
       cueHistory: [],
       frameVersion: 0,
       transcript: [],
