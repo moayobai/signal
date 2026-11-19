@@ -1,9 +1,12 @@
 import type { BodyLangRead, FaceSignals, SignalFrame, TranscriptLine } from '@signal/types';
 import { SentimentRing } from './SentimentRing';
+import { SENTIMENT_BAND_LABEL, sentimentBand, sentimentTrend } from '../../lib/sentiment';
 
 interface Props {
   frame: SignalFrame | null;
-  prevSentiment: number | null;
+  /** Smoothed sentiment from the store; null until the server sends one. */
+  sentiment: number | null;
+  sentimentHistory: number[];
   cueHistory: Array<{ frame: SignalFrame; receivedAt: number }>;
   transcript: TranscriptLine[];
   elapsedSeconds: number;
@@ -75,15 +78,13 @@ function ago(ms: number): string {
 }
 
 export function LiveSidebar({
-  frame, prevSentiment, cueHistory, transcript, elapsedSeconds, danger, onCollapse,
+  frame, sentiment, sentimentHistory, cueHistory, transcript, elapsedSeconds, danger, onCollapse,
 }: Props) {
   // `elapsedSeconds` ticks every second, keeping renders fresh.
   // Compute `now` at render time so ago() values are accurate.
   const now = Date.now();
-  const sentiment = frame?.sentiment ?? null;
-  const delta = sentiment != null && prevSentiment != null
-    ? Math.round(sentiment - prevSentiment)
-    : null;
+  const trend = sentimentTrend(sentimentHistory);
+  const band = sentimentBand(sentiment);
   const tail = transcript.slice(-5);
 
   return (
@@ -134,13 +135,14 @@ export function LiveSidebar({
         <div className="sentiment">
           <SentimentRing value={sentiment} size={72} stroke={5} showLabel />
           <div className="meta">
-            <span className="label-row">Sentiment</span>
+            <span className="label-row">Sentiment · <span className={`band ${band}`}>{SENTIMENT_BAND_LABEL[band]}</span></span>
             <span className="value">{sentiment != null ? Math.round(sentiment) : '—'}</span>
-            {delta != null ? (
-              <span className={`delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}`}>
-                {delta > 0 ? '↑' : delta < 0 ? '↓' : '·'} {Math.abs(delta)} vs prior
+            {trend != null ? (
+              <span className={`delta ${trend.direction === 'flat' ? '' : trend.direction}`}>
+                {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '·'}{' '}
+                {trend.direction === 'flat' ? 'steady' : `${Math.abs(trend.delta)} recent`}
               </span>
-            ) : <span className="delta">awaiting baseline</span>}
+            ) : <span className="delta">{sentiment == null ? 'awaiting signal' : 'awaiting baseline'}</span>}
           </div>
         </div>
       </section>

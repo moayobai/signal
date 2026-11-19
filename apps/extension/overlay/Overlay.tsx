@@ -19,7 +19,7 @@ interface OverlayProps {
 export function Overlay({ useMockFixture = false }: OverlayProps) {
   const {
     overlayState,
-    frame, prevSentiment, cueHistory, frameVersion,
+    frame, sentiment, sentimentHistory, cueHistory, frameVersion,
     transcript, elapsedSeconds, postCallSummary,
     setOverlayState, setFrame, appendTranscriptLine, setPostCallSummary, setElapsedSeconds,
   } = useSignalStore();
@@ -119,7 +119,8 @@ export function Overlay({ useMockFixture = false }: OverlayProps) {
           {!collapsed ? (
             <LiveSidebar
               frame={frame}
-              prevSentiment={prevSentiment}
+              sentiment={sentiment}
+              sentimentHistory={sentimentHistory}
               cueHistory={cueHistory}
               transcript={transcript}
               elapsedSeconds={elapsedSeconds}
