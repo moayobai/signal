@@ -10,9 +10,6 @@ export const SENTIMENT_THRESHOLDS = {
   neutral: 50,
 } as const;
 
-/** Weight of the newest sample in the exponential moving average. */
-export const SENTIMENT_SMOOTHING_ALPHA = 0.5;
-
 /** Trend changes smaller than this (in points) are treated as flat. */
 export const SENTIMENT_TREND_DEADBAND = 2;
 
@@ -41,19 +38,6 @@ export const SENTIMENT_BAND_LABEL: Record<SentimentBand, string> = {
   negative: 'At risk',
   unknown: 'No signal',
 };
-
-/**
- * Exponential moving average step. Damps single-frame spikes from the
- * server while still converging on sustained shifts within a few frames.
- */
-export function smoothSentiment(
-  prev: number | null,
-  next: number,
-  alpha: number = SENTIMENT_SMOOTHING_ALPHA,
-): number {
-  if (prev == null || !Number.isFinite(prev)) return next;
-  return prev + alpha * (next - prev);
-}
 
 export type TrendDirection = 'up' | 'down' | 'flat';
 

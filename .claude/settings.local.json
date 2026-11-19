@@ -74,7 +74,14 @@
       "Bash(echo \"Exit: $?\")",
       "Bash(pnpm run *)",
       "Bash(chmod +x \"/Users/mahomedayob/SIGNAL BUILD/scripts/google-oauth.mjs\")",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(cd apps/extension; cat vitest.config.ts; grep -rn \"SentimentArc\\\\|SentimentRing\\\\|prevSentiment\\\\|sentiment\" --include=*.ts --include=*.tsx . | grep -v node_modules | grep -v \"^./mock\"; grep -n \"sentiment\" -i ../../packages/types/src/*.ts | head -30)",
+      "Bash(npx vitest *)",
+      "Bash(python3 -)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(corepack pnpm *)",
+      "Bash(npx -y pnpm@9.15.9 build)"
     ]
   }
 }

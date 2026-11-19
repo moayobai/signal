@@ -61,8 +61,8 @@ Return ONLY valid JSON matching this exact shape — no markdown, no explanation
   - 80–100 = enthusiastic / buying (commits to next steps, talks timelines or rollout)
   - Sarcasm or polite deflection ("sounds great, send me something") is NOT positive. A raised objection followed by acceptance is positive.
   - If the prospect has said little or nothing, return 50.
-- prompt.confidence reflects how much transcript evidence supports your read (sparse or ambiguous window → ≤ 0.4).
-- If no action needed: type = "IDLE", isNudge = false, confidence = 0.1
+- prompt.confidence reflects how much transcript evidence supports your read, including the sentiment score (sparse or ambiguous window → ≤ 0.4).
+- If no action needed: type = "IDLE", isNudge = false (confidence still reflects the evidence for your sentiment read)
 - dangerFlag: true only for pricing objection, competitor mention, or >30s silence
 - timestamp: current unix milliseconds`;
 }

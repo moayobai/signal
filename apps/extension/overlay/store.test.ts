@@ -31,12 +31,12 @@ describe('signal store sentiment', () => {
     expect(get().sentimentHistory).toEqual([80]);
   });
 
-  it('smooths subsequent scores and tracks the previous smoothed value', () => {
+  it('uses server-smoothed scores directly and tracks the previous value', () => {
     get().setFrame(frame(80));
     get().setFrame(frame(40));
-    expect(get().sentiment).toBe(60);
+    expect(get().sentiment).toBe(40);
     expect(get().prevSentiment).toBe(80);
-    expect(get().sentimentHistory).toEqual([80, 60]);
+    expect(get().sentimentHistory).toEqual([80, 40]);
   });
 
   it('clamps out-of-range scores', () => {
@@ -62,11 +62,7 @@ describe('signal store sentiment', () => {
     }
     const h = get().sentimentHistory;
     expect(h).toHaveLength(MAX_SENTIMENT_HISTORY);
-    // Alternating 0/100 is damped to stay well inside the extremes.
-    for (const v of h.slice(5)) {
-      expect(v).toBeGreaterThan(20);
-      expect(v).toBeLessThan(80);
-    }
+    expect(h[h.length - 1]).toBe((MAX_SENTIMENT_HISTORY + 24) % 2 === 0 ? 0 : 100);
   });
 
   it('records only non-IDLE frames as cues', () => {

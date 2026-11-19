@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   sanitizeSentiment,
   sentimentBand,
-  smoothSentiment,
   sentimentTrend,
   sparklinePoints,
 } from './sentiment';
@@ -36,29 +35,6 @@ describe('sentimentBand', () => {
     expect(sentimentBand(null)).toBe('unknown');
     expect(sentimentBand(undefined)).toBe('unknown');
     expect(sentimentBand(NaN)).toBe('unknown');
-  });
-});
-
-describe('smoothSentiment', () => {
-  it('passes the first sample through unchanged', () => {
-    expect(smoothSentiment(null, 80)).toBe(80);
-  });
-
-  it('moves partway toward the new sample', () => {
-    expect(smoothSentiment(50, 90, 0.5)).toBe(70);
-    expect(smoothSentiment(50, 90, 0.25)).toBe(60);
-  });
-
-  it('damps a one-frame spike and converges on a sustained shift', () => {
-    let s: number | null = 60;
-    s = smoothSentiment(s, 10);
-    expect(s).toBeGreaterThan(30);
-    s = smoothSentiment(s, 60);
-    expect(s).toBeGreaterThan(45);
-
-    let t: number | null = 30;
-    for (let i = 0; i < 8; i++) t = smoothSentiment(t, 80);
-    expect(t).toBeGreaterThan(79);
   });
 });
 

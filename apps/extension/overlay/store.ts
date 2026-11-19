@@ -5,7 +5,7 @@ import type {
   TranscriptLine,
   PostCallSummary,
 } from '@signal/types';
-import { sanitizeSentiment, smoothSentiment } from '../lib/sentiment';
+import { sanitizeSentiment } from '../lib/sentiment';
 
 interface CueHistoryEntry {
   frame: SignalFrame;
@@ -16,13 +16,13 @@ interface SignalStore {
   overlayState: OverlayState;
   frame: SignalFrame | null;
   /**
-   * Smoothed (EMA) sentiment shown in the UI. Null until the server has sent
+   * Sentiment shown in the UI (already smoothed server-side). Null until the server has sent
    * a usable score — the placeholder frame's value is never displayed.
    */
   sentiment: number | null;
-  /** Previous smoothed sentiment; null until two real samples have arrived. */
+  /** Previous sentiment; null until two real samples have arrived. */
   prevSentiment: number | null;
-  /** Recent smoothed sentiment samples, oldest first. */
+  /** Recent sentiment samples, oldest first. */
   sentimentHistory: number[];
   cueHistory: CueHistoryEntry[];
   /** Monotonically increasing; used to trigger nudge-card re-animation. */
@@ -80,14 +80,15 @@ export const useSignalStore = create<SignalStore>((set) => ({
       frame,
       frameVersion: s.frameVersion + 1,
     };
-    // Frames with a missing/invalid score keep the last known sentiment
-    // rather than snapping the ring to 0.
-    const raw = sanitizeSentiment(frame.sentiment);
-    if (raw != null) {
-      const smoothed = smoothSentiment(s.sentiment, raw);
-      next.sentiment = smoothed;
+    // The server already smooths sentiment (confidence-weighted EMA in
+    // services/sentiment.ts), so use it as-is — smoothing again here would
+    // compound lag. Frames with a missing/invalid score keep the last known
+    // sentiment rather than snapping the ring to 0.
+    const value = sanitizeSentiment(frame.sentiment);
+    if (value != null) {
+      next.sentiment = value;
       next.prevSentiment = s.sentiment;
-      next.sentimentHistory = [...s.sentimentHistory, smoothed].slice(-MAX_SENTIMENT_HISTORY);
+      next.sentimentHistory = [...s.sentimentHistory, value].slice(-MAX_SENTIMENT_HISTORY);
     }
     if (isRealCue) {
       next.cueHistory = [
