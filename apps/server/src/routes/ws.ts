@@ -8,6 +8,7 @@ import { runLiveNudge } from '../services/claude.js';
 import { buildSystemPrompt, buildUserPrompt } from '../prompts/live.js';
 import { generateSummary } from '../services/summary.js';
 import { generateScorecard } from '../services/scorecard.js';
+import { SentimentTracker, blendSentiment, FACE_STALE_MS } from '../services/sentiment.js';
 import { queryProspectContext, storeCallMemory } from '../services/octamem.js';
 import { postCallSummaryToSlack } from '../services/slack.js';
 import { findOrCreateContact, writeCallEngagement } from '../services/hubspot.js';
@@ -18,6 +19,11 @@ import type { ClientMessage, ServerMessage, Prospect, SignalFrame, TranscriptLin
 
 const CLAUDE_INTERVAL_MS = 12_000;
 const MIN_NEW_LINES = 2;
+/**
+ * A danger keyword triggers an immediate nudge instead of waiting up to 12s
+ * for the next tick; this is the minimum gap between any two nudge calls.
+ */
+const MIN_NUDGE_GAP_MS = 4_000;
 /** Hard cap on in-memory transcript to prevent unbounded growth on long calls. */
 const MAX_TRANSCRIPT_LINES = 5_000;
 
@@ -52,9 +58,11 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
     let startedAt = Date.now();
     let systemPrompt = '';
     let claudeTimer: NodeJS.Timeout | null = null;
-    let sentimentSum = 0;
-    let sentimentCount = 0;
+    const sentiment = new SentimentTracker();
     let latestFaceSignals: FaceSignals | undefined;
+    let latestFaceAt = 0;
+    let nudgeInFlight = false;
+    let lastNudgeAt = 0;
     const dangerMoments: Array<{ reason: string; timestamp: number }> = [];
     const collectedTranscript: TranscriptLine[] = [];
     let stopPromise: Promise<void> | null = null;
@@ -89,6 +97,10 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
         if (danger) {
           dangerMoments.push({ reason: danger, timestamp: line.timestamp });
           send({ type: 'state', overlayState: 'DANGER' });
+          // Prospect objections are the moments sentiment moves fastest — refresh now.
+          if (line.speaker === 'prospect' && Date.now() - lastNudgeAt >= MIN_NUDGE_GAP_MS) {
+            void runNudge();
+          }
         }
       },
       onError: (err) => {
@@ -99,7 +111,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
     const hume: HumeHandle = createHumeClient({
       apiKey: opts.humeApiKey,
-      onFaceSignals: (signals) => { latestFaceSignals = signals; },
+      onFaceSignals: (signals) => { latestFaceSignals = signals; latestFaceAt = Date.now(); },
       onError: (err) => console.error('[SIGNAL] Hume error:', err),
     });
 
@@ -134,38 +146,43 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
       callState = 'ACTIVE';
       send({ type: 'state', overlayState: 'LIVE' });
 
+      claudeTimer = setInterval(() => { void runNudge(); }, CLAUDE_INTERVAL_MS);
+    }
+
+    async function runNudge(): Promise<void> {
       // Guard rail: prevent overlapping Claude calls if one hangs past the 12s tick.
-      let nudgeInFlight = false;
-      claudeTimer = setInterval(async () => {
-        if (!session || callState !== 'ACTIVE' || nudgeInFlight) return;
-        if (session.newLinesSinceLastCall < MIN_NEW_LINES) return;
-        const window = session.getWindow();
-        session.resetNewLines();
-        if (session.isSilent()) send({ type: 'state', overlayState: 'DANGER' });
-        nudgeInFlight = true;
-        const frame = await runLiveNudge({
-          ai: opts.ai,
-          model: opts.liveModel,
-          systemPrompt,
-          userPrompt: buildUserPrompt(window),
-        }).catch(err => { console.error('[SIGNAL] runLiveNudge failed:', err); return null; })
-          .finally(() => { nudgeInFlight = false; });
-        if (frame) {
-          // Attach latest Hume face signals if available
-          const enrichedFrame: SignalFrame = latestFaceSignals
-            ? { ...frame, faceSignals: latestFaceSignals }
-            : frame;
-          try {
-            persistFrame(opts.db, sessionId, enrichedFrame);
-          } catch (err) {
-            console.error('[SIGNAL] failed to persist frame:', err);
-          }
-          sentimentSum += enrichedFrame.sentiment;
-          sentimentCount += 1;
-          send({ type: 'frame', frame: enrichedFrame });
-          send({ type: 'state', overlayState: enrichedFrame.dangerFlag ? 'DANGER' : 'LIVE' });
-        }
-      }, CLAUDE_INTERVAL_MS);
+      if (!session || callState !== 'ACTIVE' || nudgeInFlight) return;
+      if (session.newLinesSinceLastCall < MIN_NEW_LINES) return;
+      if (Date.now() - lastNudgeAt < MIN_NUDGE_GAP_MS) return;
+      const window = session.getWindow();
+      session.resetNewLines();
+      if (session.isSilent()) send({ type: 'state', overlayState: 'DANGER' });
+      nudgeInFlight = true;
+      lastNudgeAt = Date.now();
+      const frame = await runLiveNudge({
+        ai: opts.ai,
+        model: opts.liveModel,
+        systemPrompt,
+        userPrompt: buildUserPrompt(window),
+      }).catch(err => { console.error('[SIGNAL] runLiveNudge failed:', err); return null; })
+        .finally(() => { nudgeInFlight = false; });
+      if (!frame || callState !== 'ACTIVE') return;
+
+      // Attach latest Hume face signals only if they are fresh.
+      const face = latestFaceSignals && Date.now() - latestFaceAt <= FACE_STALE_MS
+        ? latestFaceSignals
+        : undefined;
+      const smoothed = sentiment.update(blendSentiment(frame.sentiment, face), frame.prompt.confidence);
+      const enrichedFrame: SignalFrame = face
+        ? { ...frame, sentiment: smoothed, faceSignals: face }
+        : { ...frame, sentiment: smoothed };
+      try {
+        persistFrame(opts.db, sessionId, enrichedFrame);
+      } catch (err) {
+        console.error('[SIGNAL] failed to persist frame:', err);
+      }
+      send({ type: 'frame', frame: enrichedFrame });
+      send({ type: 'state', overlayState: enrichedFrame.dangerFlag ? 'DANGER' : 'LIVE' });
     }
 
     function onStop(): Promise<void> {
@@ -183,7 +200,7 @@ export function registerWsRoute(app: FastifyInstance, opts: WsRouteOptions): voi
 
       const endedAt = Date.now();
       const durationMs = endedAt - startedAt;
-      const sentimentAvg = sentimentCount > 0 ? sentimentSum / sentimentCount : null;
+      const sentimentAvg = sentiment.average;
 
       // Only update call_sessions if a start row was inserted
       if (session && prospect && contactId) {
