@@ -334,6 +334,9 @@
 }
 .sig-sidebar .sentiment .delta.up   { color: var(--sig-pos); }
 .sig-sidebar .sentiment .delta.down { color: var(--sig-neg); }
+.sig-sidebar .sentiment .band.positive { color: #34d399; }
+.sig-sidebar .sentiment .band.neutral  { color: #fbbf24; }
+.sig-sidebar .sentiment .band.negative { color: #fb7185; }
 
 /* ── Body lang ── */
 

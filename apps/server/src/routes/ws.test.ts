@@ -31,10 +31,10 @@ vi.mock('../services/summary.js', () => ({
 
 import { registerWsRoute } from './ws.js';
 import { initDb, callSessions, contacts, transcriptLines, callSummaries } from '../services/db.js';
-import { NoOpProvider } from '../services/ai.js';
+import { NoOpProvider, type AIProvider } from '../services/ai.js';
 import { registerSecurity } from '../services/security.js';
 
-async function buildApp(options: { auth?: boolean } = {}) {
+async function buildApp(options: { auth?: boolean; ai?: AIProvider } = {}) {
   const app = Fastify({ logger: false });
   if (options.auth) {
     await registerSecurity(app, {
@@ -47,7 +47,7 @@ async function buildApp(options: { auth?: boolean } = {}) {
   const db = initDb(':memory:');
   registerWsRoute(app, {
     db,
-    ai: new NoOpProvider(),
+    ai: options.ai ?? new NoOpProvider(),
     deepgramApiKey: 'your-deepgram-key-here',
     humeApiKey: 'your-hume-key-here',
     octamemApiKey: 'your-octamem-key-here',
@@ -164,5 +164,38 @@ describe('WebSocket route', () => {
     app = built.app;
     const res = await app.inject({ method: 'GET', url: '/ws' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('sends a frame immediately when the prospect raises an objection', async () => {
+    await app.close();
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({
+      prompt: { type: 'REFRAME', text: 'Anchor on ROI', confidence: 0.8, isNudge: true, timestamp: 1 },
+      bodyLang: { engagement: 'active', energy: 'neutral', tone: 'resistant' },
+      sentiment: 30,
+      dangerFlag: true,
+      dangerReason: 'pricing',
+    }));
+    built = await buildApp({ ai: { complete } });
+    app = built.app;
+    const listen = await app.listen({ port: 0 });
+    address = `ws://localhost:${new URL(listen).port}/ws`;
+
+    const ws = await connectAndDrainConnected(address);
+    const messages: Array<{ type: string; frame?: { sentiment: number; dangerFlag: boolean } }> = [];
+    ws.on('message', d => messages.push(JSON.parse(d.toString())));
+    ws.send(JSON.stringify({
+      type: 'start', platform: 'meet', callType: 'enterprise',
+      prospect: { name: 'James', company: 'Acme' },
+    }));
+    await new Promise(r => setTimeout(r, 100));
+    deepgramMock.options!.onTranscript({ speaker: 'user', text: 'Here is our proposal.', timestamp: Date.now() });
+    deepgramMock.options!.onTranscript({ speaker: 'prospect', text: 'Honestly that is too expensive for us.', timestamp: Date.now() });
+    await new Promise(r => setTimeout(r, 100));
+
+    expect(complete).toHaveBeenCalledTimes(1);
+    const frame = messages.find(m => m.type === 'frame');
+    expect(frame?.frame?.sentiment).toBe(30);
+    expect(frame?.frame?.dangerFlag).toBe(true);
+    ws.close();
   });
 });
